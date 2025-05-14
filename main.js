@@ -348,7 +348,7 @@ const priorityColorClass = `priority-${priority}-Color`;
         console.log("App structure initialized. Waiting for auth state...");
 
         // --- PWA Service Worker ---
-         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').then(reg => console.log('SW registered.', reg.scope)).catch(err => console.warn('SW registration failed: ', err)); }); } else { console.warn("SW not supported."); }
+         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(reg => console.log('SW registered.', reg.scope)).catch(err => console.warn('SW registration failed: ', err)); }); } else { console.warn("SW not supported."); }
 
     }); // End DOMContentLoaded
 } catch (e) {
