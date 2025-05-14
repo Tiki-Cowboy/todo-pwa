@@ -1,6 +1,6 @@
 {
-  "name": "To-Do PWA",
-  "short_name": "ToDoPWA",
+  "name": "Tiki Cowboy To Dos",
+  "short_name": "TC To Dos",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",

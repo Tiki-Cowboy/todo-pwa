@@ -300,7 +300,50 @@ const priorityColorClass = `priority-${priority}-Color`;
          function toggleSubtaskInput(taskId) { /* Keep existing logic */ const inputDiv = document.getElementById(`subtask-input-${taskId}`); if (inputDiv) { document.querySelectorAll('.subtask-input-container').forEach(div => { if (div.id !== `subtask-input-${taskId}`) { div.style.display = 'none'; } }); const isVisible = inputDiv.style.display === 'block'; inputDiv.style.display = isVisible ? 'none' : 'block'; if (!isVisible) { inputDiv.querySelector('.subtask-input').focus(); } } else { console.error(`Subtask input container not found: subtask-input-${taskId}`); } }
         function renderCategories() { /* Keep existing logic */ if (!taskCategorySelect || !categoriesList) return; taskCategorySelect.innerHTML = ''; [...categories].sort((a, b) => a.name.localeCompare(b.name)).forEach(category => { const option = document.createElement('option'); option.value = category.name; option.textContent = category.name; taskCategorySelect.appendChild(option); }); if (categories.length === 0) { const option = document.createElement('option'); option.value = 'Uncategorized'; option.textContent = 'Uncategorized'; taskCategorySelect.appendChild(option); } categoriesList.innerHTML = ''; if (categories.length === 0) { categoriesList.innerHTML = '<p>No categories defined.</p>'; return; } [...categories].sort((a, b) => a.name.localeCompare(b.name)).forEach(category => { const catDiv = document.createElement('div'); catDiv.className = `flex justify-between items-center mb-1 p-2 rounded border border-gray-300`; const nameAndColorDiv = document.createElement('div'); nameAndColorDiv.className = 'flex items-center'; const colorSwatch = document.createElement('span'); colorSwatch.className = `inline-block w-4 h-4 rounded mr-2 ${category.color || 'bg-white'} border border-gray-400`; colorSwatch.title = category.color || 'Default Color'; const categoryNameSpan = document.createElement('span'); categoryNameSpan.textContent = category.name; categoryNameSpan.className = `font-medium`; nameAndColorDiv.appendChild(colorSwatch); nameAndColorDiv.appendChild(categoryNameSpan); const isDefault = ['Personal', 'Work'].includes(category.name); const deleteBtn = document.createElement('button'); deleteBtn.textContent = 'Delete'; deleteBtn.className = 'text-xs p-1 ml-2 bg-red-500 hover:bg-red-600 text-white rounded flex-shrink-0'; if (isDefault) { deleteBtn.disabled = true; deleteBtn.title = "Cannot delete default category"; deleteBtn.classList.add('opacity-50', 'cursor-not-allowed'); } else { deleteBtn.onclick = () => deleteCategory(category.name); } catDiv.appendChild(nameAndColorDiv); catDiv.appendChild(deleteBtn); categoriesList.appendChild(catDiv); }); }
         function updateCompletionPercentage() { /* Keep existing logic */ if (!completionPercentageSpan || !currentUser) { if(completionPercentageSpan) completionPercentageSpan.textContent = '0%'; return; }; const allTasksToday = [...tasks, ...completedTasks].filter(task => isToday(task.createdAt) || (task.completedAt && isToday(task.completedAt))); const completedTodayCount = allTasksToday.filter(task => task.completedAt && isToday(task.completedAt)).length; const totalToday = allTasksToday.length; const percentage = totalToday === 0 ? 0 : Math.round((completedTodayCount / totalToday) * 100); completionPercentageSpan.textContent = `${percentage}%`; }
-        function displayReporting() { /* Keep existing logic */ if (!reportingContent || !currentUser) { if(reportingContent) reportingContent.innerHTML = '<p>Log in</p>'; return; }; reportingContent.innerHTML = ''; const allTasksHistory = [...tasks, ...completedTasks]; if (allTasksHistory.length === 0) { reportingContent.innerHTML = '<p>No data</p>'; return; } const tasksByCompletedDate = {}; allTasksHistory.forEach(task => { if (task.completedAt && task.completedAt instanceof Date && !isNaN(task.completedAt)) { const dateKey = task.completedAt.toLocaleDateString(); if (!tasksByCompletedDate[dateKey]) { tasksByCompletedDate[dateKey] = { dateObj: task.completedAt, tasks: [] }; } tasksByCompletedDate[dateKey].tasks.push(task); } }); const sortedDates = Object.keys(tasksByCompletedDate).sort((a, b) => tasksByCompletedDate[b].dateObj - tasksByCompletedDate[a].dateObj); let reportsGenerated = 0; sortedDates.forEach(dateStr => { const dayData = tasksByCompletedDate[dateStr]; const dayTasks = dayData.tasks; const totalCompletedOnDay = dayTasks.length; if (totalCompletedOnDay > 0) { reportsGenerated++; const dayContainer = document.createElement('div'); dayContainer.className = 'mb-4 p-3 border rounded bg-gray-50'; const dayHeader = document.createElement('h3'); dayHeader.textContent = `${dateStr} - Completed: ${totalCompletedOnDay}`; dayHeader.className = 'text-lg font-semibold mb-2 text-gray-700'; dayContainer.appendChild(dayHeader); const ul = document.createElement('ul'); ul.className = 'list-disc pl-5 space-y-1 text-sm'; dayTasks.sort((a, b) => a.completedAt - b.completedAt).forEach(task => { const li = document.createElement('li'); const timeString = task.completedAt.toLocaleTimeString(); const subtaskIndicator = task.parentId ? '(Subtask) ' : ''; li.textContent = `${subtaskIndicator}${task.text} [${task.priority || 'Medium'}] (${task.category || 'Uncategorized'}) (Completed: ${timeString})`; ul.appendChild(li); }); dayContainer.appendChild(ul); reportingContent.appendChild(dayContainer); } }); if (reportsGenerated === 0) { reportingContent.innerHTML = '<p>No completed tasks</p>'; } }
+        function displayReporting() { /* Keep existing logic */ if (!reportingContent || !currentUser) { if(reportingContent) reportingContent.innerHTML = '<p>Log in</p>'; return; }; reportingContent.innerHTML = ''; const allTasksHistory = [...tasks, ...completedTasks]; if (allTasksHistory.length === 0) { reportingContent.innerHTML = '<p>No data</p>'; return; } const tasksByCompletedDate = {}; allTasksHistory.forEach(task => { if (task.completedAt && task.completedAt instanceof Date && !isNaN(task.completedAt)) { const dateKey = task.completedAt.toLocaleDateString(); if (!tasksByCompletedDate[dateKey]) { tasksByCompletedDate[dateKey] = { dateObj: task.completedAt, tasks: [] }; } tasksByCompletedDate[dateKey].tasks.push(task); } }); const sortedDates = Object.keys(tasksByCompletedDate).sort((a, b) => tasksByCompletedDate[b].dateObj - tasksByCompletedDate[a].dateObj); let reportsGenerated = 0; sortedDates.forEach(dateStr => { const dayData = tasksByCompletedDate[dateStr]; const dayTasks = dayData.tasks; const totalCompletedOnDay = dayTasks.length; if (totalCompletedOnDay > 0) { reportsGenerated++; const dayContainer = document.createElement('div'); dayContainer.className = 'mb-4 p-3 border rounded bg-gray-50'; const dayHeader = document.createElement('h3'); dayHeader.textContent = `${dateStr} - Completed: ${totalCompletedOnDay}`; dayHeader.className = 'text-lg font-semibold mb-2 text-gray-700'; dayContainer.appendChild(dayHeader); 
+
+// Group by category
+const tasksByCategory = dayTasks.reduce((acc, task) => {
+  const category = task.category || 'Uncategorized';
+  if (!acc[category]) acc[category] = [];
+  acc[category].push(task);
+  return acc;
+}, {});
+
+// Sort categories alphabetically
+const sortedCategoryNames = Object.keys(tasksByCategory).sort((a, b) => a.localeCompare(b));
+
+// Render each category block
+sortedCategoryNames.forEach(category => {
+  const categoryHeader = document.createElement('h4');
+  categoryHeader.textContent = category;
+  categoryHeader.className = 'text-md font-semibold mt-2 text-gray-600';
+  dayContainer.appendChild(categoryHeader);
+
+  const ul = document.createElement('ul');
+  ul.className = 'list-disc pl-5 space-y-1 text-sm';
+
+  // Sort by priority → then by time
+  const priorityOrder = { High: 1, Medium: 2, Low: 3 };
+  tasksByCategory[category]
+    .sort((a, b) => {
+      const aPriority = priorityOrder[a.priority] || 99;
+      const bPriority = priorityOrder[b.priority] || 99;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      return a.completedAt - b.completedAt;
+    })
+    .forEach(task => {
+      const li = document.createElement('li');
+      const timeString = task.completedAt.toLocaleTimeString();
+      const subtaskIndicator = task.parentId ? '(Subtask) ' : '';
+      li.textContent = `${subtaskIndicator}${task.text} [${task.priority || 'Medium'}] (Completed: ${timeString})`;
+      ul.appendChild(li);
+    });
+
+  dayContainer.appendChild(ul);
+});
+
+reportingContent.appendChild(dayContainer); } }); if (reportsGenerated === 0) { reportingContent.innerHTML = '<p>No completed tasks</p>'; } }
 
         // --- Task Management Functions (Firestore) ---
         function findTaskById(taskId, includeCompleted = false) { let task = tasks.find(t => t.id === taskId); if (!task && includeCompleted) { task = completedTasks.find(t => t.id === taskId); } return task; }
