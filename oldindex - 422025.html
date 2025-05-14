@@ -1,0 +1,368 @@
+console.log("main.js loaded");
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log("DEBUG: DOMContentLoaded started.");
+
+  // --- Firebase Instances ---
+  if (!window.auth || !window.db) { 
+    console.error("CRITICAL: Firebase not initialized."); 
+    return; 
+  }
+  const auth = window.auth;
+  const db = window.db;
+
+  // --- DOM Element References ---
+  // Auth & App containers
+  const authSection = document.getElementById('auth-section');
+  const appContainer = document.getElementById('app-container');
+  // Auth inputs & buttons
+  const authEmailInput = document.getElementById('auth-email');
+  const authPasswordInput = document.getElementById('auth-password');
+  const signinButton = document.getElementById('signin-button');
+  const signupButton = document.getElementById('signup-button');
+  const signoutButton = document.getElementById('signout-button');
+  const authErrorDiv = document.getElementById('auth-error');
+  // User status
+  const userStatusDiv = document.getElementById('user-status');
+  const userEmailSpan = document.getElementById('user-email');
+  // Navigation
+  const homeTab = document.getElementById('home-tab');
+  const reportingTab = document.getElementById('reporting-tab');
+  const configureTab = document.getElementById('configure-tab');
+  const homeSectionEl = document.getElementById('home-section');
+  const reportingSectionEl = document.getElementById('reporting-section');
+  const configureSectionEl = document.getElementById('configure-section');
+  // Task inputs and display areas
+  const newTaskInput = document.getElementById('new-task-input');
+  const taskPrioritySelect = document.getElementById('task-priority');
+  const taskCategorySelect = document.getElementById('task-category');
+  const addTaskButton = document.getElementById('add-task-button');
+  const sortTasksSelect = document.getElementById('sort-tasks');
+  const tasksContainer = document.getElementById('tasks-container');
+  const completionPercentageSpan = document.getElementById('completion-percentage');
+  // Reporting area
+  const reportingContent = document.getElementById('reporting-content');
+  // Category configuration
+  const newCategoryInput = document.getElementById('new-category-input');
+  const addCategoryButton = document.getElementById('add-category-button');
+  const categoriesList = document.getElementById('categories-list');
+
+  // --- Application State ---
+  let currentUser = null;
+  let tasks = [];            // Pending tasks
+  let completedTasks = [];   // Completed tasks
+  // Categories stored as objects with a name and a Tailwind CSS background color class.
+  let categories = [
+    { name: 'Personal', color: 'bg-gray-100' },
+    { name: 'Work', color: 'bg-purple-100' }
+  ];
+  const defaultNewCategoryColor = { color: 'bg-blue-100' };
+  const CATEGORIES_KEY = 'todoPwaCategories_v2';
+  let unsubscribeTasks = null; // For Firestore listener if needed
+
+  // --- Persistence Functions ---
+  function loadTasks() {
+    const savedTasks = localStorage.getItem('tasks');
+    const savedCompletedTasks = localStorage.getItem('completedTasks');
+    if (savedTasks) {
+      tasks = JSON.parse(savedTasks).map(task => {
+        if (!task.category) { task.category = "Uncategorized"; }
+        if (!task.subtasks || !Array.isArray(task.subtasks)) { task.subtasks = []; }
+        return task;
+      });
+    }
+    if (savedCompletedTasks) {
+      completedTasks = JSON.parse(savedCompletedTasks).map(task => {
+        if (!task.category) { task.category = "Uncategorized"; }
+        if (!task.subtasks || !Array.isArray(task.subtasks)) { task.subtasks = []; }
+        return task;
+      });
+    }
+  }
+
+  function saveTasks() {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+    localStorage.setItem('completedTasks', JSON.stringify(completedTasks));
+  }
+
+  function loadCategories() {
+    const savedCategories = localStorage.getItem(CATEGORIES_KEY);
+    if (savedCategories) {
+      const parsed = JSON.parse(savedCategories);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        categories = parsed;
+      } else {
+        categories = [
+          { name: 'Personal', color: 'bg-gray-100' },
+          { name: 'Work', color: 'bg-purple-100' }
+        ];
+      }
+    } else {
+      categories = [
+        { name: 'Personal', color: 'bg-gray-100' },
+        { name: 'Work', color: 'bg-purple-100' }
+      ];
+    }
+  }
+
+  function saveCategories() {
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  }
+
+  function updateCategoryDropdown() {
+    taskCategorySelect.innerHTML = "";
+    categories.forEach(cat => {
+      const option = document.createElement('option');
+      option.value = cat.name;
+      option.textContent = cat.name;
+      taskCategorySelect.appendChild(option);
+    });
+  }
+
+  // --- Scheduling Notifications ---
+  function scheduleNotifications() {
+    if (!("Notification" in window)) {
+      console.log("This browser does not support notifications.");
+      return;
+    }
+    if (Notification.permission !== "granted") {
+      Notification.requestPermission().then(permission => {
+        if (permission !== "granted") {
+          console.log("Notification permission not granted.");
+        }
+      });
+    }
+    let lastMorningNotified = null;
+    let lastEveningNotified = null;
+    setInterval(() => {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      const today = now.toDateString();
+      if (hours === 8 && minutes < 2) {
+        if (lastMorningNotified !== today && Notification.permission === "granted") {
+          new Notification("Morning Reminder", {
+            body: "Good morning! Review your To-Do list and add any new tasks."
+          });
+          lastMorningNotified = today;
+        }
+      }
+      if (hours === 20 && minutes < 2) {
+        if (lastEveningNotified !== today && Notification.permission === "granted") {
+          new Notification("Evening Reminder", {
+            body: "Good evening! Check your tasks, complete pending items, and add new ones if needed."
+          });
+          lastEveningNotified = today;
+        }
+      }
+    }, 60000);
+  }
+
+  // --- Task Functions ---
+  function addTask() {
+    const text = newTaskInput.value.trim();
+    const priority = taskPrioritySelect.value;
+    const category = taskCategorySelect.value;
+    if (text !== '') {
+      tasks.push({ text, priority, category, subtasks: [], createdAt: new Date() });
+      newTaskInput.value = '';
+      updateUI();
+    } else {
+      console.log("Input is empty. No task added.");
+    }
+  }
+
+  function completeTask(task) {
+    tasks = tasks.filter(t => t !== task);
+    task.completedAt = new Date();
+    completedTasks.push(task);
+    updateUI();
+  }
+
+  function removeTask(task) {
+    tasks = tasks.filter(t => t !== task);
+    updateUI();
+  }
+
+  function addSubtask(task) {
+    const subText = prompt("Enter subtask:");
+    if (subText && subText.trim() !== "") {
+      if (!task.subtasks) task.subtasks = [];
+      task.subtasks.push({ text: subText.trim(), completedAt: null });
+      updateUI();
+    }
+  }
+
+  function completeSubtask(parentTask, subtaskIndex) {
+    const subtask = parentTask.subtasks[subtaskIndex];
+    if (!subtask.completedAt) {
+      subtask.completedAt = new Date();
+      updateUI();
+      if (parentTask.subtasks.every(st => st.completedAt)) {
+        tasks = tasks.filter(t => t !== parentTask);
+        parentTask.completedAt = new Date();
+        completedTasks.push(parentTask);
+        updateUI();
+      }
+    }
+  }
+
+  // --- Rendering Functions ---
+  function updateUI() {
+    tasksContainer.innerHTML = "";
+
+    // Group tasks by category
+    const grouped = {};
+    tasks.forEach(task => {
+      const cat = categories.find(c => c.name === task.category)?.name || "Uncategorized";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(task);
+    });
+
+    // Sorting
+    const sortOption = sortTasksSelect.value; // "none", "priority-high", "priority-low", etc.
+    const priorityValue = (priority) => {
+      if (priority === "High") return 3;
+      if (priority === "Medium") return 2;
+      if (priority === "Low") return 1;
+      return 0;
+    };
+
+    // Render each category group
+    for (const cat in grouped) {
+      const header = document.createElement('h3');
+      header.textContent = cat;
+      header.className = 'category-header';
+      tasksContainer.appendChild(header);
+
+      let groupTasks = grouped[cat];
+      if (sortOption === "priority-high") {
+        groupTasks = groupTasks.sort((a, b) => priorityValue(b.priority) - priorityValue(a.priority));
+      } else if (sortOption === "priority-low") {
+        groupTasks = groupTasks.sort((a, b) => priorityValue(a.priority) - priorityValue(b.priority));
+      }
+      const ul = document.createElement('ul');
+      groupTasks.forEach(task => {
+        const li = document.createElement('li');
+        li.textContent = task.text + " [" + task.priority + "]";
+        li.addEventListener('click', () => {
+          if (!task.subtasks || task.subtasks.length === 0) completeTask(task);
+        });
+        // Remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeTask(task);
+        });
+        li.appendChild(removeBtn);
+        // Add Subtask button
+        const subtaskBtn = document.createElement('button');
+        subtaskBtn.textContent = "Add Subtask";
+        subtaskBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addSubtask(task);
+        });
+        li.appendChild(subtaskBtn);
+        ul.appendChild(li);
+      });
+      tasksContainer.appendChild(ul);
+    }
+
+    // Update completion percentage (simple calculation)
+    let totalUnits = tasks.length + completedTasks.length;
+    let completedCount = completedTasks.length;
+    const percentage = totalUnits === 0 ? 0 : Math.round((completedCount / totalUnits) * 100);
+    completionPercentageSpan.textContent = `${percentage}%`;
+
+    saveTasks();
+  }
+
+  function renderCategories() {
+    updateCategoryDropdown();
+    categoriesList.innerHTML = "";
+    categories.forEach(cat => {
+      const div = document.createElement('div');
+      div.textContent = cat.name;
+      const delBtn = document.createElement('button');
+      delBtn.textContent = "Delete";
+      delBtn.onclick = () => deleteCategory(cat.name);
+      div.appendChild(delBtn);
+      categoriesList.appendChild(div);
+    });
+  }
+
+  function deleteCategory(categoryName) {
+    categories = categories.filter(c => c.name !== categoryName);
+    tasks.forEach(task => { if (task.category === categoryName) task.category = "Uncategorized"; });
+    completedTasks.forEach(task => { if (task.category === categoryName) task.category = "Uncategorized"; });
+    saveCategories();
+    renderCategories();
+    updateUI();
+  }
+
+  // --- Reporting Function ---
+  function displayReporting() {
+    reportingContent.innerHTML = "";
+    // Group completed tasks by date (local date)
+    const tasksByDate = {};
+    completedTasks.forEach(task => {
+      const dateStr = new Date(task.completedAt).toLocaleDateString();
+      if (!tasksByDate[dateStr]) tasksByDate[dateStr] = [];
+      tasksByDate[dateStr].push(task);
+    });
+    Object.keys(tasksByDate).sort().forEach(dateStr => {
+      const header = document.createElement('h3');
+      header.textContent = `${dateStr} - Completed: ${tasksByDate[dateStr].length}`;
+      reportingContent.appendChild(header);
+      const ul = document.createElement('ul');
+      tasksByDate[dateStr].forEach(task => {
+        const li = document.createElement('li');
+        li.textContent = `${task.text} [${task.priority}] (${task.category}) (Completed at: ${new Date(task.completedAt).toLocaleTimeString()})`;
+        ul.appendChild(li);
+      });
+      reportingContent.appendChild(ul);
+    });
+  }
+
+  // --- Event Listeners ---
+  addTaskButton.addEventListener('click', addTask);
+  newTaskInput.addEventListener('keyup', (e) => { if (e.key === 'Enter') addTask(); });
+  sortTasksSelect.addEventListener('change', updateUI);
+  homeTab.addEventListener('click', () => {
+    homeSectionEl.style.display = 'block';
+    reportingSectionEl.style.display = 'none';
+    configureSectionEl.style.display = 'none';
+  });
+  reportingTab.addEventListener('click', () => {
+    homeSectionEl.style.display = 'none';
+    reportingSectionEl.style.display = 'block';
+    configureSectionEl.style.display = 'none';
+    displayReporting();
+  });
+  configureTab.addEventListener('click', () => {
+    homeSectionEl.style.display = 'none';
+    reportingSectionEl.style.display = 'none';
+    configureSectionEl.style.display = 'block';
+    renderCategories();
+  });
+  addCategoryButton.addEventListener('click', () => {
+    const newCat = newCategoryInput.value.trim();
+    if (newCat && !categories.some(c => c.name === newCat)) {
+      categories.push({ name: newCat, color: defaultNewCategoryColor.color });
+      newCategoryInput.value = '';
+      saveCategories();
+      renderCategories();
+      updateCategoryDropdown();
+      updateUI();
+    }
+  });
+
+  // --- Initialization ---
+  loadCategories();
+  updateCategoryDropdown();
+  renderCategories();
+  loadTasks();
+  updateUI();
+  scheduleNotifications();
+});

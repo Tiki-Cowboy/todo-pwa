@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>To-Do PWA</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <style>
+        /* Basic Styles */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; padding: 1rem; } /* bg-gray-100 p-4 */
+        @media (min-width: 768px) { body { padding: 2rem; } } /* md:p-8 */
+
+        button, input[type="text"], input[type="email"], input[type="password"], select {
+            padding: 0.5rem; border-width: 1px; border-color: #d1d5db; /* border-gray-300 */ border-radius: 0.375rem; /* rounded-md */
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+            outline: 2px solid transparent; outline-offset: 2px; /* Focus rings - basic */
+        }
+        button:focus, input:focus, select:focus {
+             --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+             --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+             box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+             border-color: #3b82f6; /* focus:ring-blue-500 */
+             --tw-ring-color: #3b82f6;
+        }
+
+        button {
+            background-color: #3b82f6; /* bg-blue-500 */ color: white; cursor: pointer;
+            transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms;
+        }
+        button:hover { background-color: #2563eb; } /* hover:bg-blue-600 */
+
+        /* Navigation Styles */
+        nav button { background-color: #e5e7eb; color: #374151; } /* bg-gray-200 text-gray-700 */
+        nav button:hover { background-color: #d1d5db; } /* hover:bg-gray-300 */
+        nav button.active { background-color: #3b82f6; color: white; font-weight: 600; } /* bg-blue-500 text-white font-semibold */
+
+        /* --- Task Item Structure & Styling --- */
+        .task-item {
+            display: flex; align-items: stretch; justify-content: space-between;
+            margin-bottom: 0.5rem; /* mb-2 */ border-width: 1px; border-color: #e5e7eb; /* border-gray-200 */
+            border-radius: 0.5rem; /* rounded-lg */ box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* shadow-sm */
+            background-color: white; overflow: hidden;
+        }
+        .task-details {
+            flex-grow: 1; margin-right: auto; display: flex; align-items: center;
+            min-width: 0; padding: 0.75rem; /* p-3 */
+            /* Background color applied by JS using Tailwind classes - needs Tailwind script active */
+            /* Or modify JS to apply standard background-color if Tailwind script is off */
+        }
+        .task-item.completed .task-details { background-color: rgba(243, 244, 246, 0.7); } /* Example completed style */
+        .task-item.completed .task-details .task-text {
+            text-decoration-line: line-through; color: #6b7280; /* text-gray-500 */
+         }
+        .task-text { word-wrap: break-word; } /* break-words */
+
+        /* --- Priority Span Styling (REMOVED - Handled by JS Inline Styles) --- */
+        /* .priority-span { ... } */
+        /* .priority-High-Color { ... } */
+        /* .priority-Medium-Color { ... } */
+        /* .priority-Low-Color { ... } */
+
+
+        /* --- Task Action Button Styling (Standard CSS) --- */
+         .task-actions {
+             flex-shrink: 0; display: flex; align-items: center; padding: 0.5rem; /* p-2 */ background-color: white;
+         }
+        .task-actions button {
+            font-size: 0.75rem; line-height: 1rem; /* text-xs */ padding: 0.25rem; /* p-1 */ margin-left: 0.5rem; /* ml-2 */
+            border-width: 1px; border-color: #9ca3af; /* border-gray-400 */
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */ background-color: #f9fafb; /* bg-gray-100 */
+            color: #374151; /* text-gray-700 */ border-radius: 0.25rem; /* rounded */
+            cursor: pointer; transition: background-color 150ms ease-in-out;
+        }
+        .task-actions button:hover { background-color: #f3f4f6; } /* hover:bg-gray-200 */
+
+        /* These specific button styles might still rely on classes being added by JS */
+        .task-actions button.complete-btn { background-color: #22c55e; border-color: #16a34a; color: white; }
+        .task-actions button.complete-btn:hover { background-color: #16a34a; }
+        .task-actions button.delete-btn { background-color: #ef4444; border-color: #dc2626; color: white; }
+        .task-actions button.delete-btn:hover { background-color: #dc2626; }
+        .task-actions button.add-subtask-btn { background-color: #3b82f6; border-color: #2563eb; color: white; }
+        .task-actions button.add-subtask-btn:hover { background-color: #2563eb; }
+
+        /* Subtask Styles */
+        .subtask-input-container { margin-top: 0.5rem; margin-left: 1.5rem; /* ml-6 */ padding: 0.5rem; border-width: 1px; border-radius: 0.375rem; background-color: #f9fafb; display: flex; gap: 0.5rem; }
+        .subtask-input-container input { flex-grow: 1; }
+        .subtask-input-container button { font-size: 0.875rem; line-height: 1.25rem; /* text-sm */ padding-left: 0.75rem; padding-right: 0.75rem; padding-top: 0.25rem; padding-bottom: 0.25rem; /* px-3 py-1 */ }
+
+        /* --- Category Header Styling --- */
+        .category-header {
+            font-size: 1.25rem; line-height: 1.75rem; /* text-xl */ font-weight: 700; /* font-bold */
+            margin-top: 1.5rem; /* mt-6 */ margin-bottom: 0.5rem; /* mb-2 */
+            border-bottom-width: 2px; padding-bottom: 0.25rem; /* pb-1 */
+            color: #374151; /* text-gray-700 */ border-color: #d1d5db; /* border-gray-300 */
+        }
+
+        /* Section Visibility & Auth Styles */
+        main section { display: none; } main section.active { display: block; }
+        #auth-section { max-width: 28rem; /* max-w-md */ margin-left: auto; margin-right: auto; margin-top: 2.5rem; /* mt-10 */ padding: 1.5rem; /* p-6 */ background-color: white; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        #auth-section input { width: 100%; margin-bottom: 0.75rem; } #auth-section button { width: 100%; margin-bottom: 0.75rem; }
+        #auth-error { color: #ef4444; font-size: 0.875rem; line-height: 1.25rem; margin-bottom: 0.75rem; min-height: 1.25rem; text-align: center; }
+        #user-status { text-align: right; font-size: 0.875rem; line-height: 1.25rem; color: #4b5563; margin-bottom: 1rem; max-width: 56rem; margin-left: auto; margin-right: auto; }
+        #user-status button { font-size: 0.75rem; line-height: 1rem; padding: 0.25rem; margin-left: 0.5rem; background-color: #6b7280; color: white; }
+        #user-status button:hover { background-color: #4b5563; }
+        #app-container, #user-status { display: none; }
+
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <header class="text-center mb-6"> <h1 class="text-3xl font-bold text-gray-800"> Jack's To Do App</h1> </header>
+
+    <section id="auth-section"> <h2 class="text-xl font-semibold mb-4 text-center">Login or Sign Up</h2> <div id="auth-error" class="text-center"></div> <input type="email" id="auth-email" placeholder="Email" required /> <input type="password" id="auth-password" placeholder="Password" required /> <button id="signin-button">Sign In</button> <button id="signup-button" class="bg-green-500 hover:bg-green-600">Sign Up</button> </section>
+
+    <div id="app-container">
+        <div id="user-status"> Logged in as: <span id="user-email" class="font-semibold"></span> <button id="signout-button">Sign Out</button> </div>
+        <nav class="flex justify-center space-x-4 mb-6"> <button id="home-tab" class="active">Home</button> <button id="reporting-tab">Reporting</button> <button id="configure-tab">Configure</button> </nav>
+        <main class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
+            <section id="home-section" class="active">
+                 <h2 class="text-2xl font-semibold mb-4 text-gray-700">Today's Tasks</h2>
+                 <div class="flex flex-wrap gap-2 mb-4 p-4 border rounded-lg bg-gray-50"> <input type="text" id="new-task-input" placeholder="Add new top-level task..." class="flex-grow" /> <select id="task-priority" class="w-full sm:w-auto"> <option value="Medium">Medium Priority</option> <option value="High">High Priority</option> <option value="Low">Low Priority</option> </select> <select id="task-category" class="w-full sm:w-auto"> </select> <button id="add-task-button" class="w-full sm:w-auto">Add Task</button> </div>
+                 <div class="mb-4"> <label for="sort-tasks" class="mr-2 text-gray-600">Sort by:</label> <select id="sort-tasks" class="w-auto"> <option value="default">Default (Category)</option> <option value="priority-high">Highest Priority First</option> <option value="priority-low">Lowest Priority First</option> <option value="name-asc">Name (A-Z)</option> <option value="name-desc">Name (Z-A)</option> </select> </div>
+                 <div id="tasks-container" class="mb-6 space-y-2"> <p class="text-gray-500 italic">Loading tasks...</p> </div>
+                 <div class="text-right font-semibold text-gray-700"> <p>Today's Completion: <span id="completion-percentage" class="text-xl text-blue-600">0%</span></p> </div>
+            </section>
+            <section id="reporting-section"> <h2 class="text-2xl font-semibold mb-4 text-gray-700">Reporting</h2> <div id="reporting-content" class="space-y-4"></div> </section>
+            <section id="configure-section"> <h2 class="text-2xl font-semibold mb-4 text-gray-700">Configure Categories</h2> <div class="flex gap-2 mb-6 p-4 border rounded-lg bg-gray-50"> <input type="text" id="new-category-input" placeholder="New category name" class="flex-grow" /> <button id="add-category-button" class="w-full sm:w-auto">Add Category</button> </div> <h3 class="text-xl font-semibold mb-2 text-gray-600">Existing Categories</h3> <div id="categories-list" class="space-y-2"> </div> </section>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script>
+      // --- PASTE YOUR firebaseConfig Object HERE ---
+      const firebaseConfig = {
+          apiKey: "AIzaSyCutmMJtIHjKXFdqKBxO8tuTHkf4ZzEYeA", // Using user's provided config
+          authDomain: "my-to-do-app-5b0e1.firebaseapp.com",
+          projectId: "my-to-do-app-5b0e1",
+          storageBucket: "my-to-do-app-5b0e1.firebasestorage.app",
+          messagingSenderId: "293934015306",
+          appId: "1:293934015306:web:a58da42ad935a8193b57b3"
+      };
+      // --- END firebaseConfig ---
+      try {
+          firebase.initializeApp(firebaseConfig);
+          window.auth = firebase.auth();
+          window.db = firebase.firestore();
+          console.log("Firebase Initialized Successfully");
+      } catch (e) {
+          console.error("Error initializing Firebase:", e);
+          document.body.innerHTML = '<p style="color: red; font-weight: bold; text-align: center; margin-top: 20px;">Error initializing Firebase.</p>';
+      }
+    </script>
+    <script src="main.js"></script>
+</body>
+</html>
