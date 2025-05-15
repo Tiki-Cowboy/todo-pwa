@@ -218,7 +218,6 @@ try {
 
             const detailsDiv = document.createElement('div');
             detailsDiv.className = 'task-details'; // Styled by CSS
-            detailsDiv.classList.add(bgColorClass); // Apply category background class
             detailsDiv.style.display = 'flex';
             detailsDiv.style.alignItems = 'center';
             detailsDiv.style.gap = '1rem';
