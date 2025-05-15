@@ -226,6 +226,7 @@ try {
 
             const taskTextSpan = document.createElement('span');
             taskTextSpan.textContent = task.text;
+            console.log("Rendering task:", task);
             taskTextSpan.className = 'task-text'; // Styled by CSS
 
             // --- Priority Span ---
@@ -405,8 +406,70 @@ function completeTask(taskId) { if (!currentUser) { alert("Log in"); return; } c
         // --- Initialization ---
         console.log("App structure initialized. Waiting for auth state...");
 
-        // --- PWA Service Worker ---
-         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').then(reg => console.log('SW registered.', reg.scope)).catch(err => console.warn('SW registration failed: ', err)); }); } else { console.warn("SW not supported."); }
+        // --- PWA Service Worker with Update Banner ---
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      console.log('SW registered.', reg.scope);
+
+      if (reg.waiting) {
+        showUpdateBanner(reg);
+      }
+
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(reg);
+          }
+        });
+      });
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        window.location.reload();
+        refreshing = true;
+      });
+    }).catch(err => {
+      console.warn('SW registration failed: ', err);
+    });
+  });
+}
+
+      // --- Popup Banner to Update App to Newest Version ---
+
+function showUpdateBanner(registration) {
+  const banner = document.createElement('div');
+  banner.textContent = 'A new version is available.';
+  banner.style.position = 'fixed';
+  banner.style.bottom = '0';
+  banner.style.left = '0';
+  banner.style.right = '0';
+  banner.style.backgroundColor = '#2563eb';
+  banner.style.color = 'white';
+  banner.style.padding = '0.75rem';
+  banner.style.textAlign = 'center';
+  banner.style.zIndex = '1000';
+
+  const updateButton = document.createElement('button');
+  updateButton.textContent = 'Tap to Update';
+  updateButton.style.marginLeft = '1rem';
+  updateButton.style.background = 'white';
+  updateButton.style.color = '#2563eb';
+  updateButton.style.border = 'none';
+  updateButton.style.padding = '0.5rem 1rem';
+  updateButton.style.borderRadius = '0.375rem';
+  updateButton.style.cursor = 'pointer';
+
+  updateButton.onclick = () => {
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  };
+
+  banner.appendChild(updateButton);
+  document.body.appendChild(banner);
+}
+
 
     }); // End DOMContentLoaded
 } catch (e) {
