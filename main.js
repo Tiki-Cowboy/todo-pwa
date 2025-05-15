@@ -193,7 +193,7 @@ try {
             if (!tasksContainer || !currentUser) return;
             const taskElement = createTaskElement(task); // Creates element relying on CSS classes
             if (level === 0 && topLevelIndex !== null) {
-            taskElement.style.backgroundColor = (topLevelIndex % 2 === 0) ? '#ffffff' : '#f9fafb'; // alternate colors
+            taskElement.style.backgroundColor = (topLevelIndex % 2 === 0) ? '#ffffff' : '#f3f4f6'; // alternate colors
 }
             if (level > 0) { taskElement.style.marginLeft = `${level * 2}rem`; }
             let isCompleted = completedTasks.some(ct => ct.id === task.id);
