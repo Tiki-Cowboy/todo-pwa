@@ -230,14 +230,33 @@ try {
             taskTextSpan.className = 'task-text'; // Styled by CSS
 
             // --- Priority Span ---
+
             const prioritySelect = document.createElement('select');
-['High', 'Medium', 'Low'].forEach(level => {
-  const option = document.createElement('option');
-  option.value = level;
-  option.textContent = level;
-  if (level === task.priority) option.selected = true;
-  prioritySelect.appendChild(option);
+            ['High', 'Medium', 'Low'].forEach(level => {
+               const option = document.createElement('option');
+                  option.value = level;
+                  option.textContent = level;
+               if (level === task.priority) option.selected = true;
+               prioritySelect.appendChild(option);
 });
+
+            function setPriorityColor(select, value) {
+               switch (value) {
+                 case 'High':
+                    select.style.backgroundColor = '#FF0000'; // Bright red
+                    break;
+                 case 'Medium':
+                    select.style.backgroundColor = '#FFA500'; // Bright orange
+                    break;
+                 case 'Low':
+                    select.style.backgroundColor = '#FFFF00'; // Bright yellow
+                    break;
+                 default:
+                    select.style.backgroundColor = 'transparent';
+  }
+}
+setPriorityColor(prioritySelect, task.priority); // Initial color
+
 prioritySelect.className = 'ml-2 text-sm border border-gray-300 rounded px-1';
 prioritySelect.addEventListener('change', () => {
   updateTaskPriority(task.id, prioritySelect.value);
