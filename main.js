@@ -241,6 +241,7 @@ prioritySelect.className = 'ml-2 text-sm border border-gray-300 rounded px-1';
 prioritySelect.addEventListener('change', () => {
   updateTaskPriority(task.id, prioritySelect.value);
 });
+detailsDiv.appendChild(taskTextSpan)
 detailsDiv.appendChild(prioritySelect);
 
             // --- Actions Div ---
