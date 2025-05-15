@@ -229,35 +229,19 @@ try {
             taskTextSpan.className = 'task-text'; // Styled by CSS
 
             // --- Priority Span ---
-            const prioritySpan = document.createElement('span');
-            const priority = task.priority || 'Medium';
-            prioritySpan.textContent = priority;
-            prioritySpan.style.marginLeft = '1rem';
-            prioritySpan.style.fontWeight = 'bold';
-            prioritySpan.style.color = 'black';
-            // Add margin for spacing (we already did this)
-            prioritySpan.style.marginLeft = '0.5rem';
-
-            // Apply background color based on the priority value
-            switch (task.priority) {
-            case "High":
-              prioritySpan.style.backgroundColor = "#FF0000"; // bright red
-              break;
-            case "Medium":
-    prioritySpan.style.backgroundColor = "#FFA500"; // bright orange
-    break;
-  case "Low":
-    prioritySpan.style.backgroundColor = "#FFFF00"; // bright yellow
-    break;
-  default:
-    prioritySpan.style.backgroundColor = "transparent";
-}
-const priorityColorClass = `priority-${priority}-Color`;
-            // Apply classes defined in CSS <style> block
-            prioritySpan.className = `priority-span ${priorityColorClass}`;
-
-            detailsDiv.appendChild(taskTextSpan);
-            detailsDiv.appendChild(prioritySpan);
+            const prioritySelect = document.createElement('select');
+['High', 'Medium', 'Low'].forEach(level => {
+  const option = document.createElement('option');
+  option.value = level;
+  option.textContent = level;
+  if (level === task.priority) option.selected = true;
+  prioritySelect.appendChild(option);
+});
+prioritySelect.className = 'ml-2 text-sm border border-gray-300 rounded px-1';
+prioritySelect.addEventListener('change', () => {
+  updateTaskPriority(task.id, prioritySelect.value);
+});
+detailsDiv.appendChild(prioritySelect);
 
             // --- Actions Div ---
             const actionsDiv = document.createElement('div');
@@ -346,11 +330,41 @@ sortedCategoryNames.forEach(category => {
 reportingContent.appendChild(dayContainer); } }); if (reportsGenerated === 0) { reportingContent.innerHTML = '<p>No completed tasks</p>'; } }
 
         // --- Task Management Functions (Firestore) ---
-        function findTaskById(taskId, includeCompleted = false) { let task = tasks.find(t => t.id === taskId); if (!task && includeCompleted) { task = completedTasks.find(t => t.id === taskId); } return task; }
-        function getSubtasks(parentId, includeCompleted = false) { const activeSubtasks = tasks.filter(t => t.parentId === parentId); if (includeCompleted) { const completedSubtasks = completedTasks.filter(t => t.parentId === parentId); return [...activeSubtasks, ...completedSubtasks]; } return activeSubtasks; }
-        function addTask() { if (!currentUser) { alert("Log in"); return; } if (!newTaskInput || !taskPrioritySelect || !taskCategorySelect) return; const text = newTaskInput.value.trim(); if (text === '') { alert('Enter task'); newTaskInput.focus(); return; } const userId = currentUser.uid; const priority = taskPrioritySelect.value; const category = taskCategorySelect.value || 'Uncategorized'; const newTaskId = Date.now().toString(); const newTaskData = { text: text, priority: priority, category: category, createdAt: firebase.firestore.FieldValue.serverTimestamp(), completedAt: null, parentId: null }; const optimisticTask = { ...newTaskData, id: newTaskId, createdAt: new Date() }; tasks.push(optimisticTask); renderTasks(); const originalInputText = newTaskInput.value; newTaskInput.value = ''; const taskRef = db.collection('users').doc(userId).collection('tasks').doc(newTaskId); taskRef.set(newTaskData).then(() => console.log("Task added:", newTaskId)).catch((e) => { console.error("Error adding task:", e); alert("Error saving task."); tasks = tasks.filter(t => t.id !== newTaskId); newTaskInput.value = originalInputText; renderTasks(); }); }
-        function addSubtask(parentId, text, parentPriority, parentCategory) { if (!currentUser) { alert("Log in"); return; } if (!text) return; const userId = currentUser.uid; const newSubtaskId = Date.now().toString(); const newSubtaskData = { text: text, priority: parentPriority || 'Medium', category: parentCategory || 'Uncategorized', createdAt: firebase.firestore.FieldValue.serverTimestamp(), completedAt: null, parentId: parentId }; const optimisticSubtask = { ...newSubtaskData, id: newSubtaskId, createdAt: new Date() }; tasks.push(optimisticSubtask); renderTasks(); const taskRef = db.collection('users').doc(userId).collection('tasks').doc(newSubtaskId); taskRef.set(newSubtaskData).then(() => console.log("Subtask added:", newSubtaskId)).catch((e) => { console.error("Error adding subtask:", e); alert("Error saving subtask."); tasks = tasks.filter(t => t.id !== newSubtaskId); renderTasks(); }); }
-        function completeTask(taskId) { if (!currentUser) { alert("Log in"); return; } const userId = currentUser.uid; const taskRef = db.collection('users').doc(userId).collection('tasks').doc(taskId); const taskIndex = tasks.findIndex(t => t.id === taskId); let originalTask = null; if(taskIndex > -1) { originalTask = { ...tasks[taskIndex] }; const taskToComplete = tasks.splice(taskIndex, 1)[0]; taskToComplete.completed = true; taskToComplete.completedAt = new Date(); completedTasks.push(taskToComplete); renderTasks(); if (taskToComplete.parentId) { checkAndCompleteParent(taskToComplete.parentId); } } else { console.warn(`Task ${taskId} not active locally.`); } taskRef.update({ completedAt: firebase.firestore.FieldValue.serverTimestamp() }).then(() => console.log("Task completed:", taskId)).catch((e) => { console.error("Error completing task:", e); alert("Error completing task."); if (originalTask && taskIndex > -1) { completedTasks = completedTasks.filter(t => t.id !== taskId); tasks.splice(taskIndex, 0, originalTask); renderTasks(); } }); }
+        
+function updateTaskPriority(taskId, newPriority) {
+  if (!currentUser) { alert("Log in"); return; }
+
+  // Optimistically update local state
+  const task = findTaskById(taskId, true);
+  if (task) {
+    task.priority = newPriority;
+    renderTasks();
+  }
+
+  // Update in Firestore
+  const taskRef = db.collection('users').doc(currentUser.uid).collection('tasks').doc(taskId);
+  taskRef.update({ priority: newPriority })
+    .then(() => console.log(`Priority updated for ${taskId}: ${newPriority}`))
+    .catch((e) => {
+      console.error("Error updating priority:", e);
+      alert("Failed to update priority.");
+    });
+}
+
+function findTaskById(taskId, includeCompleted = false) { let task = tasks.find(t => t.id === taskId); if (!task && includeCompleted) { task = completedTasks.find(t => t.id === taskId); } return task; }
+        
+function getSubtasks(parentId, includeCompleted = false) { const activeSubtasks = tasks.filter(t => t.parentId === parentId); if (includeCompleted) { const completedSubtasks = completedTasks.filter(t => t.parentId === parentId); return [...activeSubtasks, ...completedSubtasks]; } return activeSubtasks; }
+        
+function addTask() { if (!currentUser) { alert("Log in"); return; } if (!newTaskInput || !taskPrioritySelect || !taskCategorySelect) return; const text = newTaskInput.value.trim(); if (text === '') { alert('Enter task'); newTaskInput.focus(); return; } const userId = currentUser.uid; const priority = taskPrioritySelect.value; const category = taskCategorySelect.value || 'Uncategorized'; const newTaskId = Date.now().toString(); const newTaskData = { text: text, priority: priority, category: category, createdAt: firebase.firestore.FieldValue.serverTimestamp(), completedAt: null, parentId: null }; const optimisticTask = { ...newTaskData, id: newTaskId, createdAt: new Date() }; tasks.push(optimisticTask); renderTasks(); const originalInputText = newTaskInput.value; newTaskInput.value = ''; const taskRef = db.collection('users').doc(userId).collection('tasks').doc(newTaskId); taskRef.set(newTaskData).then(() => console.log("Task added:", newTaskId)).catch((e) => { console.error("Error adding task:", e); alert("Error saving task."); tasks = tasks.filter(t => t.id !== newTaskId); newTaskInput.value = originalInputText; renderTasks(); }); }
+        
+function addSubtask(parentId, text, parentPriority, parentCategory) { if (!currentUser) { alert("Log in"); return; } if (!text) return; const userId = currentUser.uid; const newSubtaskId = Date.now().toString(); 
+
+   const newSubtaskData = { 
+      text: text, 
+      priority: 'Medium', 
+      category: parentCategory || 'Uncategorized', createdAt: firebase.firestore.FieldValue.serverTimestamp(), completedAt: null, parentId: parentId }; const optimisticSubtask = { ...newSubtaskData, id: newSubtaskId, createdAt: new Date() }; tasks.push(optimisticSubtask); renderTasks(); const taskRef = db.collection('users').doc(userId).collection('tasks').doc(newSubtaskId); taskRef.set(newSubtaskData).then(() => console.log("Subtask added:", newSubtaskId)).catch((e) => { console.error("Error adding subtask:", e); alert("Error saving subtask."); tasks = tasks.filter(t => t.id !== newSubtaskId); renderTasks(); }); }
+        
+function completeTask(taskId) { if (!currentUser) { alert("Log in"); return; } const userId = currentUser.uid; const taskRef = db.collection('users').doc(userId).collection('tasks').doc(taskId); const taskIndex = tasks.findIndex(t => t.id === taskId); let originalTask = null; if(taskIndex > -1) { originalTask = { ...tasks[taskIndex] }; const taskToComplete = tasks.splice(taskIndex, 1)[0]; taskToComplete.completed = true; taskToComplete.completedAt = new Date(); completedTasks.push(taskToComplete); renderTasks(); if (taskToComplete.parentId) { checkAndCompleteParent(taskToComplete.parentId); } } else { console.warn(`Task ${taskId} not active locally.`); } taskRef.update({ completedAt: firebase.firestore.FieldValue.serverTimestamp() }).then(() => console.log("Task completed:", taskId)).catch((e) => { console.error("Error completing task:", e); alert("Error completing task."); if (originalTask && taskIndex > -1) { completedTasks = completedTasks.filter(t => t.id !== taskId); tasks.splice(taskIndex, 0, originalTask); renderTasks(); } }); }
         function checkAndCompleteParent(parentId) { console.log(`Checking parent ${parentId}`); const parentTask = findTaskById(parentId); if (!parentTask) { console.log("Parent not active."); return; } const allSubtasks = getSubtasks(parentId, true); const allSubtasksCompleted = allSubtasks.length > 0 && allSubtasks.every(sub => completedTasks.some(comp => comp.id === sub.id)); if (allSubtasksCompleted) { console.log(`Completing parent ${parentId}.`); completeTask(parentId); } else { console.log(`Subtasks not all complete for ${parentId}.`); } }
         async function deleteTask(taskId) { if (!currentUser) { alert("Log in"); return; } if (!confirm("Delete task & ALL subtasks?")) return; const userId = currentUser.uid; const taskRef = db.collection('users').doc(userId).collection('tasks').doc(taskId); const tasksToDeleteIds = [taskId]; const originalTasks = [...tasks]; const originalCompletedTasks = [...completedTasks]; let subtasks = getSubtasks(taskId, true); subtasks.forEach(sub => tasksToDeleteIds.push(sub.id)); tasks = tasks.filter(t => !tasksToDeleteIds.includes(t.id)); completedTasks = completedTasks.filter(t => !tasksToDeleteIds.includes(t.id)); renderTasks(); try { console.log(`Deleting task ${taskId} & subtasks...`); const subtaskQuery = db.collection('users').doc(userId).collection('tasks').where('parentId', '==', taskId); const subtaskSnapshot = await subtaskQuery.get(); const subtaskDeletePromises = []; subtaskSnapshot.forEach(doc => { console.log(`Deleting subtask ${doc.id}`); subtaskDeletePromises.push(deleteTask(doc.id)); }); await Promise.all(subtaskDeletePromises); console.log(`Subtasks for ${taskId} deleted. Deleting parent...`); await taskRef.delete(); console.log("Task deleted:", taskId); } catch (e) { console.error("Error deleting task:", e); alert("Error deleting task."); tasks = originalTasks; completedTasks = originalCompletedTasks; renderTasks(); } }
 
