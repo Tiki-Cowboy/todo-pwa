@@ -216,13 +216,12 @@ try {
             div.dataset.taskId = task.id;
             div.className = 'task-item'; // Base class
 
-            const categoryName = task.category || 'Uncategorized';
-            const categoryObj = categories.find(c => c.name === categoryName);
-            const bgColorClass = categoryObj?.color || 'bg-white';
-
             const detailsDiv = document.createElement('div');
             detailsDiv.className = 'task-details'; // Styled by CSS
             detailsDiv.classList.add(bgColorClass); // Apply category background class
+            detailsDiv.style.display = 'flex';
+            detailsDiv.style.alignItems = 'center';
+            detailsDiv.style.gap = '1rem';
 
             const taskTextSpan = document.createElement('span');
             taskTextSpan.textContent = task.text;
@@ -348,7 +347,113 @@ sortedCategoryNames.forEach(category => {
   dayContainer.appendChild(ul);
 });
 
-reportingContent.appendChild(dayContainer); } }); if (reportsGenerated === 0) { reportingContent.innerHTML = '<p>No completed tasks</p>'; } }
+reportingContent.appendChild(dayContainer); } }); if (reportsGenerated === 0) { reportingContent.innerHTML = '<p>No completed tasks</p>'; 
+return; // Prevents charts from rendering
+} 
+
+// --- Append chart canvases to reporting content ---
+const chartContainer = document.createElement('div');
+chartContainer.innerHTML = `
+  <hr class="my-6" />
+  <h3 class="text-lg font-semibold mb-4 text-gray-700">Visual Summary</h3>
+  <canvas id="tasksByCategory" height="200"></canvas>
+  <canvas id="tasksByHour" height="200"></canvas>
+  <canvas id="tasksByWeekday" height="200"></canvas>
+`;
+reportingContent.appendChild(chartContainer);
+
+// --- Build datasets for reporting charts ---
+const categoryCounts = {};
+const hourCounts = new Array(24).fill(0);
+const weekdayCounts = new Array(7).fill(0);
+
+// Loop through all completed tasks from your grouped date structure
+Object.values(tasksByCompletedDate).forEach(dayData => {
+  dayData.tasks.forEach(task => {
+    const cat = task.category || 'Uncategorized';
+    categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+
+    if (task.completedAt instanceof Date) {
+      const hour = task.completedAt.getHours(); // 0–23
+      const day = task.completedAt.getDay();    // 0 = Sunday
+      hourCounts[hour]++;
+      weekdayCounts[day]++;
+    }
+  });
+});
+
+// Category Pie Chart
+new Chart(document.getElementById('tasksByCategory'), {
+  type: 'pie',
+  data: {
+    labels: Object.keys(categoryCounts),
+    datasets: [{
+      data: Object.values(categoryCounts),
+      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6366f1']
+    }]
+  },
+  options: {
+    plugins: {
+      title: {
+        display: true,
+        text: 'Completed Tasks by Category'
+      }
+    }
+  }
+});
+
+// Time-of-Day Bar Chart
+new Chart(document.getElementById('tasksByHour'), {
+  type: 'bar',
+  data: {
+    labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+    datasets: [{
+      label: 'Tasks Completed',
+      data: hourCounts,
+      backgroundColor: '#10b981'
+    }]
+  },
+  options: {
+    plugins: {
+      title: {
+        display: true,
+        text: 'Tasks by Time of Day'
+      }
+    },
+    scales: {
+      y: { beginAtZero: true }
+    }
+  }
+});
+
+// Day-of-Week Bar Chart
+const weekdayLabels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+new Chart(document.getElementById('tasksByWeekday'), {
+  type: 'bar',
+  data: {
+    labels: weekdayLabels,
+    datasets: [{
+      label: 'Tasks Completed',
+      data: weekdayCounts,
+      backgroundColor: '#f59e0b'
+    }]
+  },
+  options: {
+    plugins: {
+      title: {
+        display: true,
+        text: 'Tasks by Day of Week'
+      }
+    },
+    scales: {
+      y: { beginAtZero: true }
+    }
+  }
+});
+
+
+
+}
 
         // --- Task Management Functions (Firestore) ---
         
