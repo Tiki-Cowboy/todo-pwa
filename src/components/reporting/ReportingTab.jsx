@@ -1,26 +1,39 @@
 import { useState, useMemo } from 'react'
-import { subDays } from 'date-fns'
+import { subDays, startOfDay, endOfDay, parseISO, isToday } from 'date-fns'
 import CompletedByDay from './CompletedByDay'
 import Charts from './Charts'
 
 const RANGES = [
-  { value: '7',   label: 'Last 7 days' },
-  { value: '30',  label: 'Last 30 days' },
-  { value: 'all', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: '7',     label: 'Last 7 days' },
+  { value: '30',    label: 'Last 30 days' },
+  { value: 'all',   label: 'All time' },
+  { value: 'custom', label: 'Custom' },
 ]
 
-function filterByRange(tasks, range) {
+function filterByRange(tasks, range, customStart, customEnd) {
+  if (range === 'today') {
+    return tasks.filter(t => t.completedAt && isToday(t.completedAt))
+  }
+  if (range === 'custom') {
+    if (!customStart || !customEnd) return []
+    const start = startOfDay(parseISO(customStart))
+    const end   = endOfDay(parseISO(customEnd))
+    return tasks.filter(t => t.completedAt && t.completedAt >= start && t.completedAt <= end)
+  }
   if (range === 'all') return tasks
   const cutoff = subDays(new Date(), parseInt(range))
   return tasks.filter(t => t.completedAt && t.completedAt >= cutoff)
 }
 
-export default function ReportingTab({ completedTasks, categories }) {
-  const [range, setRange] = useState('7')
+export default function ReportingTab({ completedTasks, categories, projects }) {
+  const [range, setRange]           = useState('today')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd]     = useState('')
 
   const filtered = useMemo(
-    () => filterByRange(completedTasks, range),
-    [completedTasks, range]
+    () => filterByRange(completedTasks, range, customStart, customEnd),
+    [completedTasks, range, customStart, customEnd]
   )
 
   const cardStyle = { border: '1px solid rgba(12, 26, 51, 0.06)' }
@@ -47,6 +60,29 @@ export default function ReportingTab({ completedTasks, categories }) {
           ))}
         </div>
       </div>
+
+      {range === 'custom' && (
+        <div className="flex flex-wrap items-center gap-3 mb-6 bg-white rounded-xl px-4 py-3" style={cardStyle}>
+          <span className="text-xs text-text-tertiary font-medium">From</span>
+          <input
+            type="date"
+            value={customStart}
+            max={customEnd || undefined}
+            onChange={e => setCustomStart(e.target.value)}
+            className="text-sm rounded-lg px-3 py-1.5 bg-page-bg"
+            style={{ border: '1px solid rgba(12,26,51,0.12)', colorScheme: 'light' }}
+          />
+          <span className="text-xs text-text-tertiary font-medium">To</span>
+          <input
+            type="date"
+            value={customEnd}
+            min={customStart || undefined}
+            onChange={e => setCustomEnd(e.target.value)}
+            className="text-sm rounded-lg px-3 py-1.5 bg-page-bg"
+            style={{ border: '1px solid rgba(12,26,51,0.12)', colorScheme: 'light' }}
+          />
+        </div>
+      )}
 
       {/* Summary strip */}
       {(() => {
@@ -79,7 +115,7 @@ export default function ReportingTab({ completedTasks, categories }) {
 
       {/* Completed log */}
       <h3 className="text-lg font-medium text-text-primary mt-8 mb-4">Completed Tasks</h3>
-      <CompletedByDay tasks={filtered} />
+      <CompletedByDay tasks={filtered} projects={projects} />
     </div>
   )
 }

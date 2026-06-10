@@ -1,13 +1,19 @@
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp,
-  writeBatch, getDocs, where,
+  writeBatch, getDocs, getDoc, setDoc, where,
 } from 'firebase/firestore'
 import { db } from './firebase'
 
 const tasksRef      = uid => collection(db, 'users', uid, 'tasks')
 const categoriesRef = uid => collection(db, 'users', uid, 'categories')
 const projectsRef   = uid => collection(db, 'users', uid, 'projects')
+const userDocRef    = uid => doc(db, 'users', uid)
+
+function localDateStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
 
@@ -45,6 +51,18 @@ export async function addTask(uid, { text, priority, category, dueDate = null, p
 
 export async function setDailyTaskCompletion(uid, taskId, date) {
   await updateDoc(doc(tasksRef(uid), taskId), { lastCompletedDate: date })
+}
+
+export async function getLastResetDate(uid) {
+  const snap = await getDoc(userDocRef(uid))
+  return snap.exists() ? (snap.data().lastResetDate ?? null) : null
+}
+
+export async function resetDailyTasks(uid, taskIds) {
+  const batch = writeBatch(db)
+  taskIds.forEach(id => batch.update(doc(tasksRef(uid), id), { lastCompletedDate: null }))
+  await batch.commit()
+  await setDoc(userDocRef(uid), { lastResetDate: localDateStr() }, { merge: true })
 }
 
 export async function updateTask(uid, taskId, updates) {

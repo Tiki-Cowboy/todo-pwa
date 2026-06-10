@@ -16,40 +16,27 @@
 | DONE-006 | Claude Assistant | Firebase Cloud Function (HTTPS Callable, `claudeChat`), Anthropic SDK server-side, agentic tool-use loop (create/update/complete/delete tasks), Secret Manager for API key, AssistantPanel slide-in with typing indicator |
 | DONE-007 | PWA Icons Fix | Moved icon assets into `public/icons/` so Vite copies them to `dist/` on build; resolved standalone install mode not working on mobile |
 | DONE-008 | Firebase Hosting Deploy | App live at https://my-to-do-app-5b0e1.web.app; Cloud Function deployed to us-central1 |
-
----
-
-## BUG-001 | P1 | Mobile Layout Broken — Not Sized to Screen
-
-**Description:**
-On mobile, the PWA renders in a zoomed-out state that is left-aligned with excess whitespace on the right side. The app does not fill the screen properly and feels clunky to use on a phone.
-
-**Acceptance Criteria:**
-- App fills the full width of the mobile viewport with no horizontal overflow or dead space
-- No unintended zoom-out on load; content is readable at native scale
-- Layout feels native on both iOS Safari and Android Chrome
-- Tested on at least one iOS and one Android device after fix
-
----
-
-## FEAT-001 | P1 | Bearing Design System — Full Visual Overhaul
-*Ref: `Branding-and-schema-updates.md` Part 4*
-
-**Description:**
-Replace the existing dark teal color palette and Playfair Display typography entirely with the Bearing design system (navy + gold, warm off-white page background, white cards). The two apps (Tiki To-Dos and Bearing) share a user and personality — they should feel like siblings. Includes updating CSS variables, Tailwind config, nav bar, cards, priority colors, status pills, and done button.
-
-**Acceptance Criteria:**
-- All CSS variables replaced with Bearing tokens (see Part 4 of ref doc)
-- Tailwind config updated with Bearing color namespace
-- Nav bar: `--navy-deep` background, gold wordmark (`TIKI TO-DOS`, uppercase, letter-spaced), gold rule beneath
-- Active tab uses 2px gold bottom border indicator, no fill
-- Page background is `--bg` (#F4F2ED) — warm off-white, not dark
-- Cards are white (`--card-bg`) with subtle navy border and 16px radius
-- Priority colors updated: High → red, Medium → amber, Low → green (Bearing semantic palette)
-- All pills/badges use correct bg/text color pairings
-- Done button is a circle: outline default, green filled when complete
-- No Playfair Display anywhere — DM Sans only, weights 400/500/600
-- No dark backgrounds on content areas (dark is nav only)
+| BUG-001 | Mobile Layout Fixed | Root cause: NavBar content overflowing mobile viewport. Fixed with scrollable nav, responsive padding, smaller text on mobile, and global overflow-x:hidden. |
+| FEAT-001 | Bearing Design System | Full visual overhaul: navy/gold palette, DM Sans typography, CSS custom properties, Tailwind token namespace, updated all cards/pills/buttons/nav throughout the app. |
+| FEAT-004 | Projects — Data Model & Hook | `users/{uid}/projects` Firestore collection, `projectId` on tasks, `useProjects` hook with full CRUD. Batch delete cascades to tasks. |
+| FEAT-005 | Projects Tab UI | Collapsible project cards grouped by category, 2-column grid on md+, colored accent bars, inline quick-add (with priority + due date), always-visible Add Task strip, project description line, pencil/trash icons in card header. Add Project moved here as inline panel. |
+| FEAT-006 | Configure Tab — Projects Section | Edit/archive/delete projects from Configure. Add Project removed from Configure (moved to Projects tab). Archived + Completed projects in collapsible section. |
+| FEAT-007 | Due Dates — Storage, Display & Overdue Flagging | ISO date strings, relative formatting (Overdue·Jun 3 / Today / Tomorrow / day name / date), red overdue treatment throughout, overdue-first sort, on-time rate in Reporting. |
+| FEAT-008 | Today Tab (partial) | Renamed Home → Today. Filters to overdue + due-today only. Empty state: "All clear. Nothing due today." Daily Checklist section added. (pinnedToday and Completed Today panel not yet built.) |
+| FEAT-010 | Projects — 4 Statuses + Hero Card + Filter | Added Completed as 4th project status (blue). Projects hero card: Active/On Hold/Archived/Completed counts + % Done. Filter toggle: All/Active/On Hold/Archived/Completed. |
+| FEAT-011 | Daily Recurring Tasks | Project type flag (standard/daily). Daily tasks use `lastCompletedDate` instead of `completedAt` — check off resets each day automatically, no backend cron needed. Daily Checklist section on Today tab. ↻ Daily badge on project cards. Toggle (Standard/Daily) in project creation and edit modal. |
+| BUG-002 | Daily Tasks Reset Not Working | `useDailyReset` hook: compares today vs Firestore `lastResetDate` on user doc, resets all daily task `lastCompletedDate` fields in a batch write, schedules a midnight client-side re-check. Timezone bug fixed — all date comparisons use local date via date-fns `format()`. |
+| BUG-003 | Daily Tasks Not Grouped by Project | `groupedDailyTasks` memo in HomeTab groups by `projectId`, sorts groups by project name, renders a muted project sub-header + divider before each group. |
+| BUG-004 | Hide Claude Chat FAB | `src/config.js` exports `SHOW_CLAUDE_FAB = false`; FAB wrapped in `{SHOW_CLAUDE_FAB && (...)}` in AppShell. One-line re-enable. |
+| BUG-005 | Scrollable Completed-Tasks Table | CompletedByDay rewritten as CSS-grid table (4 cols: Title/Project/Priority/Completed). Column header sticky at `top:0`, day sub-headers sticky at `top:36px`. Max-height 600px scrollable container. Border + box-shadow distinguishes table from page background. |
+| BUG-006 | Subtasks Disappear on Save | `addSubtask` in `useTasks.js` was not forwarding `projectId` to Firestore, so child tasks got `projectId: null` and were excluded from `projectTaskMap`. Fixed by passing `projectId: parent?.projectId ?? null`. |
+| BUG-007 | Daily Task Rows Missing Action Buttons | `DailyTaskRow` in ProjectCard had only an Edit button and no Delete or Add Sub-task. Added all three icon buttons (pencil / + / ×) matching the standard task row pattern, with the same hover-reveal and two-step delete confirm behaviour. |
+| FEAT-012 | Due & Overdue Sort + Project Badges | Segmented sort control (Due Date / Priority / Project) above the list. Each row shows a small project pill in the project's accent color. Sort state persists for the session. |
+| FEAT-013 | Completion Celebration (Confetti) | `canvas-confetti` burst on emptying either list. `CelebrationBanner` component (Framer Motion spring, fixed bottom-center). Once-per-list-per-day cooldown via `celebratedRef`. |
+| FEAT-014 | Reporting — Today Filter + Custom Date Range | Added "Today" (default) and "Custom Range" to the filter bar. Custom picker: two `<input type="date">` fields with min/max constraints. All charts and the completed-tasks log respond correctly. |
+| FEAT-015 | Bottom Nav + Configure Collapsed into Projects | Bottom nav (Today / Projects / Reporting) with SVG icons; navy bg, gold active state, safe-area inset padding. Top NavBar simplified to wordmark + Sign Out. On desktop (`md+`) tab buttons remain in the top bar; BottomNav hidden via `md:hidden`. Manage Categories panel (gear icon, AnimatePresence) at bottom of Projects tab replaces standalone Configure tab. |
+| FEAT-016 | Parent-Child Subtasks (Projects + Today) | `parentId` field on task docs. ProjectCard: "+ Sub" icon on each task row opens inline SubtaskAddRow; SubtaskRow renders indented below parent with its own edit/delete icons. Completing all children auto-completes parent. Today tab: subtasks rendered indented below parent in the Due & Overdue list with per-subtask complete buttons. Subtask rows collapsible via inline ▾/▶ toggle. |
+| FEAT-017 | Icon Action Buttons | All text-based task action buttons (Edit / Del / + Sub) replaced with SVG icons: pencil for edit, × (soft red) for delete, + for add sub-task. Tooltip via `title` attribute. Buttons fade in on row hover. Delete still requires two clicks (first click turns icon bright red + updates tooltip). |
 
 ---
 
@@ -84,88 +71,14 @@ Build a remote MCP server that exposes the user's Firestore task and project dat
 
 ---
 
-## FEAT-004 | P1 | Projects — Data Model & Hook
-*Ref: `Branding-and-schema-updates.md` Part 1 (Data Model)*
+## FEAT-008 | P1 | Today Tab — Remaining Items
 
 **Description:**
-Introduce Projects as a first-class concept sitting between categories and tasks. Create the `users/{uid}/projects` Firestore collection, add `projectId: string | null` to the task schema, and implement the `useProjects` hook. No UI changes in this ticket — data layer only. Existing tasks with no `projectId` remain valid and unchanged.
+The Today tab exists and shows overdue + due-today tasks and the Daily Checklist. The following acceptance criteria from the original spec are still outstanding.
 
-**Acceptance Criteria:**
-- `projects` collection created in Firestore with schema: `id`, `name`, `categoryName`, `status`, `description`, `createdAt`, `updatedAt`
-- `projectId` field added to task schema (null for existing tasks — no migration needed)
-- `useProjects` hook implemented: `projects`, `activeProjects`, `addProject`, `updateProject`, `archiveProject`, `deleteProject`, `getProjectById`
-- Deleting a project sets `projectId: null` on all its tasks via batch update, then deletes the project doc
-- Existing tasks unaffected — display exactly as before
-
----
-
-## FEAT-005 | P1 | Projects Tab UI
-*Ref: `Branding-and-schema-updates.md` Part 1 (UI Changes)*
-
-**Description:**
-Build the Projects tab: collapsible project cards grouped by category, task rows within cards, standalone tasks (no project) above cards, and an inline "+ Add task" affordance inside expanded cards. Depends on FEAT-004.
-
-**Acceptance Criteria:**
-- Projects tab shows all active projects as collapsible cards grouped by category
-- Project card: colored left accent bar, header (name, category, task count, status pill, chevron), collapsible task list
-- Default state: expanded if project has overdue tasks, collapsed otherwise
-- Task rows: 3px priority bar, text, due date secondary line, priority pill, done button, overflow menu
-- Standalone tasks (no project) render above project cards under their category header
-- Inline "+ Add task" affordance at bottom of expanded project card, pre-fills project field
-- Task input row at top of Projects tab includes project dropdown
-- Task edit modal includes project selector with hint text: *"Optional — group this task under a project"*
-
----
-
-## FEAT-006 | P1 | Configure Tab — Projects Section
-*Ref: `Branding-and-schema-updates.md` Part 1 (Configure tab)*
-
-**Description:**
-Add a Projects management section to the Configure tab, below the existing Categories section. Depends on FEAT-004.
-
-**Acceptance Criteria:**
-- Projects section lists all projects grouped by category
-- Each row shows: name, status pill, truncated description, edit + archive + delete buttons
-- "Add Project" button opens a modal with fields: Name, Category, Status, Description
-- Archived projects visible in a collapsible "Archived" section at the bottom
-- Archived projects hidden from the Projects tab and task input dropdown
-
----
-
-## FEAT-007 | P1 | Due Dates — Storage, Display & Overdue Flagging
-*Ref: `Branding-and-schema-updates.md` Part 2*
-
-**Description:**
-Formalize due date storage as ISO date strings and add overdue detection with visual flagging. Overdue tasks get red treatment throughout the app and sort to the top of their group. Adds due date to the completed task log and an on-time rate stat card to Reporting.
-
-**Acceptance Criteria:**
-- `dueDate` stored as ISO date string (`YYYY-MM-DD`) or null — no Firestore Timestamp
-- Task input and edit modal include a date picker
-- Due date displays using relative format: Overdue · Jun 3 (red), Today (gold), Tomorrow (gold), day name within 7 days, `Jun 14` or `Jun 14, 2027` beyond that
-- Overdue tasks: red secondary due date line + warning icon + red priority bar override
-- Overdue tasks sort to top within their group
-- Overdue tasks auto-expand their parent project card on the Projects tab
-- Reporting completed task log shows due date alongside completion date
-- On-time rate stat card added to Reporting
-
----
-
-## FEAT-008 | P1 | Nav Restructure + Today Tab
-*Ref: `Branding-and-schema-updates.md` Part 3*
-
-**Description:**
-Replace the Home / Reporting / Configure nav with four tabs: Today, Projects, Reporting, Configure. Build the Today tab as a read-focused daily briefing showing overdue + due-today tasks and a completed-today panel. No task input on Today tab — task creation moves to the Projects tab and assistant.
-
-**Acceptance Criteria:**
-- Four tabs: Today, Projects, Reporting, Configure
-- Today tab shows page title as today's date (e.g. `Monday, June 9`)
-- Overdue banner (⚠ N overdue tasks) shown only when overdue tasks exist; includes "Add to today" button
-- Due & Overdue panel: all overdue + due-today tasks, sorted overdue-first then due-today; shows project/category + formatted due date
-- Completed Today panel: tasks completed today, shows time; hidden entirely if none completed yet
-- Empty state shown when nothing is due: `All clear. Nothing due today.`
-- No task input on the Today tab
-- `pinnedToday` flag: "Add to today" sets flag; flag resets at midnight (or on first app load after midnight)
-- Pinned tasks appear in Due & Overdue panel regardless of due date
+**Remaining:**
+- Completed Today panel: tasks completed today shown with completion time; panel hidden entirely if no tasks completed yet today
+- `pinnedToday` flag: "Add to today" pins any task to the Due & Overdue panel regardless of due date; flag resets on first app load after midnight
 
 ---
 
@@ -183,3 +96,134 @@ Add a daily progress hero card to the top of the Today tab and compact progress 
 - At 100%: bar and percentage switch to `--accent-green`
 - At 0%: empty track only, no fill
 - Both counts update in real time as tasks are completed
+
+---
+
+## Open Bugs
+
+*No open bugs at this time.*
+
+---
+
+## FEAT-016 | P2 | Push Notifications — 11 PM Daily Reminder
+**Complexity:** M
+**Platform:** Android only
+
+**Description:**
+Send a push notification at ~11:00 PM each night reminding the user to review and check off remaining tasks.
+
+**Acceptance Criteria:**
+- App requests Web Push notification permission on first use with a friendly explanatory prompt
+- User's push subscription stored in Firestore against their user record
+- Firebase Cloud Function on a scheduled trigger (nightly ~11 PM) sends push via Web Push API
+- Notification copy: *"🌴 Hey — did you close out today? A few tasks might still be waiting on you."*
+- Tapping the notification opens the app to the Today tab
+- If all tasks for the day are already completed, notification is skipped
+
+**Notes:**
+- Web Push for PWAs requires a service worker (already in place via `vite-plugin-pwa`)
+- VAPID keys to be generated and stored as Firebase environment config
+
+---
+
+## FEAT-017 | P2 | Calendar Integration — Phase 1: Read Access
+**Complexity:** L
+**Note:** Required dependency for FEAT-018
+
+**Description:**
+Connect the app to the user's Google Calendar to read events. Foundational layer for all calendar features.
+
+**Acceptance Criteria:**
+- "Connect Calendar" button in Projects or Configure area triggers Google OAuth flow
+- OAuth credentials/tokens stored securely in Firestore against user record
+- App can read user's calendar events for a given day
+- Calendar connection state visible (connected/disconnected indicator)
+- User can disconnect calendar at any time, clearing stored credentials
+- Token refresh handled gracefully (store refresh tokens, handle expiry)
+- Read-only scope: `https://www.googleapis.com/auth/calendar.readonly`
+
+---
+
+## FEAT-018 | P2 | Calendar Integration — Phase 2: End-of-Day Smart Prompt Modal
+**Complexity:** L
+**Depends on:** FEAT-017
+
+**Description:**
+At ~5:30 PM, surface a modal reviewing the user's calendar events and prompting them to log completed tasks or add forgotten ones, based on event-to-project matching.
+
+**Acceptance Criteria:**
+- Modal appears at ~5:30 PM (client-side trigger) if app is open, or on next open after 5:30 PM that day
+- Modal shows curated calendar events that match projects, with prompts to mark tasks complete
+- Matching uses two layers: (1) fuzzy string match between event title and project names, (2) attendee email domain vs project names for weak title matches
+- Only events above a defined confidence threshold are surfaced
+- Each prompted item has **Mark Complete** and **Dismiss** actions
+- Modal appears at most once per day; does not re-surface if dismissed
+- If no confident matches found, modal does not appear
+
+**Notes:**
+- Use `fuse.js` for fuzzy title matching
+
+---
+
+## FEAT-019 | Future | Calendar Integration — Phase 3: Write Access / Calendar Blocking
+**Complexity:** XL
+**Depends on:** FEAT-017
+**Status:** Needs further scoping before implementation
+
+**Description:**
+Allow the app to write events to Google Calendar — either reminders tied to tasks or time-blocking events.
+
+**Notes:**
+- Open questions: What triggers a write? Manual or app-suggested? Event format/duration?
+- Will require upgrading OAuth scope to `https://www.googleapis.com/auth/calendar.events`
+- Do not implement until scoped further
+
+---
+
+## FEAT-020 | P3 | Achievements & Badges System
+**Complexity:** XL
+**Soft dependency:** BUG-002 (streak tracking requires daily reset to work)
+
+**Description:**
+A milestone-based achievement system tracking and celebrating user accomplishments over time.
+
+**Acceptance Criteria:**
+
+*Display:*
+- "Badges" shelf in the Reporting tab
+- Horizontally scrollable row of circular or hexagonal badge icons
+- Locked badges greyed out; unlocked badges in full color with gold border
+- Tapping an unlocked badge shows tooltip/modal with name, description, date earned
+
+*Badge Set:*
+
+| Category | Badge Name | Trigger |
+|---|---|---|
+| Volume | The Opener | 50 tasks completed |
+| Volume | The Closer | 100 tasks completed |
+| Volume | Machine Mode | 500 tasks completed |
+| Volume | Unstoppable | 1,000 tasks completed |
+| Consistency | On a Roll | Complete all dailies 3 days in a row |
+| Consistency | Week Warrior | Complete all dailies 7 days in a row |
+| Consistency | The Monk | Complete all dailies 30 days in a row |
+| Consistency | Legendary | Complete all dailies 100 days in a row |
+| Daily Sweep | Clean Slate | Complete every Due & Overdue item in a single day |
+| Daily Sweep | Perfect Week | Achieve Clean Slate 5 days in the same week |
+| Speed | Lightning Round | Complete a task within 1 hour of it becoming due |
+| Dedication | Showing Up | Log in and complete ≥1 task every day for 7 days |
+
+*Data Model:*
+- New `achievements` Firestore collection or sub-collection per user
+- Stores: unlocked badges + timestamps earned
+- Aggregate counters on user document: `totalTasksCompleted`, `currentDailyStreak`, `longestDailyStreak`
+- Counters incremented on task completion; streak evaluated on daily reset
+- Badge unlock checks happen client-side after relevant events
+
+---
+
+## Dependency Map
+
+```
+FEAT-018 (Calendar Read) ─────────────────────────► FEAT-019 (Smart Prompt Modal)
+                         ─────────────────────────► FEAT-020 (Calendar Write) [future]
+```

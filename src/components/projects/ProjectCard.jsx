@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { formatDueDate, isOverdue } from '../../lib/dateUtils'
 
 const ACCENT_COLORS = ['#C4A24E', '#C0392B', '#4A6FA5', '#2D8F65', '#9b7fd4', '#e87c4a']
-
 const PRIORITY_BAR  = { High: '#C0392B', Medium: '#C4A24E', Low: '#2D8F65' }
 const PRIORITY_BG   = { High: 'rgba(192,57,43,0.06)',  Medium: 'rgba(196,162,78,0.08)', Low: 'rgba(45,143,101,0.08)' }
 const PRIORITY_TEXT = { High: '#C0392B', Medium: '#8B7332', Low: '#2D8F65' }
@@ -26,8 +25,26 @@ function StatusPill({ status }) {
 
 function PencilIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 1.5l2.5 2.5L4 11.5H1.5V9L9 1.5z" />
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="1.5" y1="1.5" x2="9.5" y2="9.5" />
+      <line x1="9.5" y1="1.5" x2="1.5" y2="9.5" />
+    </svg>
+  )
+}
+
+function PlusIcon({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="6" y1="1" x2="6" y2="11" />
+      <line x1="1" y1="6" x2="11" y2="6" />
     </svg>
   )
 }
@@ -44,8 +61,16 @@ function TrashIcon() {
 
 const TODAY = new Date().toISOString().split('T')[0]
 
-function DailyTaskRow({ task, onToggle, onOpenEdit }) {
+// ── Daily task row ─────────────────────────────────────────────────────────────
+
+function DailyTaskRow({ task, onToggle, onOpenEdit, onDelete, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const doneToday = task.lastCompletedDate === TODAY
+
+  function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000) }
+    else onDelete(task.id)
+  }
 
   return (
     <div
@@ -53,16 +78,52 @@ function DailyTaskRow({ task, onToggle, onOpenEdit }) {
       style={{ borderTop: '1px solid rgba(12,26,51,0.04)' }}
     >
       <div className="flex-1 min-w-0">
-        <p className={`text-sm leading-snug ${doneToday ? 'line-through text-text-tertiary' : 'text-text-primary'}`}>
-          {task.text}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className={`flex-1 text-sm leading-snug ${doneToday ? 'line-through text-text-tertiary' : 'text-text-primary'}`}>
+            {task.text}
+          </p>
+          {hasSubtasks && (
+            <button
+              onClick={onToggleSubtasks}
+              title={subtasksCollapsed ? 'Show sub-tasks' : 'Hide sub-tasks'}
+              className="text-[10px] text-text-tertiary hover:text-text-secondary shrink-0 transition leading-none"
+            >
+              {subtasksCollapsed ? '▶' : '▾'}
+            </button>
+          )}
+        </div>
       </div>
-      <button
-        onClick={() => onOpenEdit(task)}
-        className="text-[11px] text-text-tertiary hover:text-text-secondary transition hidden group-hover:inline shrink-0"
-      >
-        Edit
-      </button>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button
+          onClick={() => onOpenEdit(task)}
+          title="Edit task"
+          aria-label="Edit task"
+          className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+        >
+          <PencilIcon />
+        </button>
+        {onAddSubtask && (
+          <button
+            onClick={onAddSubtask}
+            title="Add sub-task"
+            aria-label="Add sub-task"
+            className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+          >
+            <PlusIcon />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={handleDelete}
+            title={confirmDelete ? 'Click again to confirm' : 'Delete task'}
+            aria-label="Delete task"
+            className="w-6 h-6 flex items-center justify-center rounded-md transition"
+            style={{ color: confirmDelete ? '#C0392B' : 'rgba(192,57,43,0.45)' }}
+          >
+            <XIcon />
+          </button>
+        )}
+      </div>
       <button
         onClick={() => onToggle(task.id, doneToday)}
         className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all shrink-0"
@@ -81,7 +142,9 @@ function DailyTaskRow({ task, onToggle, onOpenEdit }) {
   )
 }
 
-function TaskRow({ task, onComplete, onDelete, onOpenEdit }) {
+// ── Standard task row ──────────────────────────────────────────────────────────
+
+function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [completing, setCompleting]       = useState(false)
   const due     = task.dueDate ? formatDueDate(task.dueDate) : null
@@ -109,37 +172,62 @@ function TaskRow({ task, onComplete, onDelete, onOpenEdit }) {
     >
       <div className="w-[3px] self-stretch rounded-full shrink-0 mt-0.5" style={{ background: barColor }} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-text-primary leading-snug break-words">{task.text}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="flex-1 text-sm text-text-primary leading-snug break-words">{task.text}</p>
+          {hasSubtasks && (
+            <button
+              onClick={onToggleSubtasks}
+              title={subtasksCollapsed ? 'Show sub-tasks' : 'Hide sub-tasks'}
+              className="text-[10px] text-text-tertiary hover:text-text-secondary shrink-0 transition leading-none"
+            >
+              {subtasksCollapsed ? '▶' : '▾'}
+            </button>
+          )}
+        </div>
         {due && (
           <p className="text-xs mt-0.5" style={{ color: due.overdue ? '#C0392B' : '#8B93A1' }}>
             {due.overdue && '⚠ '}{due.label}
           </p>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-0.5 shrink-0">
         <span
-          className="text-[11px] font-medium px-2 py-0.5 rounded-lg hidden group-hover:inline"
+          className="text-[11px] font-medium px-2 py-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity mr-1"
           style={{ background: PRIORITY_BG[task.priority], color: PRIORITY_TEXT[task.priority] }}
         >
           {task.priority}
         </span>
         <button
           onClick={() => onOpenEdit(task)}
-          className="text-[11px] text-text-tertiary hover:text-text-secondary transition hidden group-hover:inline"
+          title="Edit task"
+          aria-label="Edit task"
+          className="w-6 h-6 flex items-center justify-center rounded-md transition opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text-secondary hover:bg-black/5"
         >
-          Edit
+          <PencilIcon />
         </button>
+        {onAddSubtask && (
+          <button
+            onClick={onAddSubtask}
+            title="Add sub-task"
+            aria-label="Add sub-task"
+            className="w-6 h-6 flex items-center justify-center rounded-md transition opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+          >
+            <PlusIcon />
+          </button>
+        )}
         <button
           onClick={handleDelete}
-          className="text-[11px] transition hidden group-hover:inline"
-          style={{ color: confirmDelete ? '#C0392B' : '#8B93A1' }}
+          title={confirmDelete ? 'Click again to confirm' : 'Delete task'}
+          aria-label="Delete task"
+          className="w-6 h-6 flex items-center justify-center rounded-md transition opacity-0 group-hover:opacity-100"
+          style={{ color: confirmDelete ? '#C0392B' : 'rgba(192,57,43,0.45)' }}
         >
-          {confirmDelete ? 'Sure?' : 'Del'}
+          <XIcon />
         </button>
         <button
           onClick={handleComplete}
           disabled={completing}
-          className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-40"
+          className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-40 ml-0.5"
           style={{ background: 'transparent', border: '1.5px solid rgba(12,26,51,0.15)' }}
           aria-label="Complete task"
         />
@@ -147,6 +235,121 @@ function TaskRow({ task, onComplete, onDelete, onOpenEdit }) {
     </motion.div>
   )
 }
+
+// ── Subtask row ────────────────────────────────────────────────────────────────
+
+function SubtaskRow({ task, onComplete, onDelete, onOpenEdit }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [completing, setCompleting]       = useState(false)
+
+  async function handleComplete() {
+    setCompleting(true)
+    await new Promise(r => setTimeout(r, 200))
+    onComplete(task.id, task.parentId)
+  }
+
+  function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000) }
+    else onDelete(task.id)
+  }
+
+  return (
+    <motion.div
+      layout
+      animate={completing ? { opacity: 0, x: 20 } : { opacity: 1, x: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-2 py-1.5 pl-6 group"
+      style={{ borderTop: '1px solid rgba(12,26,51,0.03)' }}
+    >
+      <div className="w-[2px] self-stretch rounded-full shrink-0" style={{ background: 'rgba(12,26,51,0.12)' }} />
+      <p className="flex-1 text-xs text-text-secondary leading-snug break-words">{task.text}</p>
+      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => onOpenEdit(task)}
+          title="Edit sub-task"
+          aria-label="Edit sub-task"
+          className="w-5 h-5 flex items-center justify-center rounded transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+        >
+          <PencilIcon />
+        </button>
+        <button
+          onClick={handleDelete}
+          title={confirmDelete ? 'Click again to confirm' : 'Delete sub-task'}
+          aria-label="Delete sub-task"
+          className="w-5 h-5 flex items-center justify-center rounded transition"
+          style={{ color: confirmDelete ? '#C0392B' : 'rgba(192,57,43,0.45)' }}
+        >
+          <XIcon />
+        </button>
+      </div>
+      <button
+        onClick={handleComplete}
+        disabled={completing}
+        className="w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-40"
+        style={{ background: 'transparent', border: '1.5px solid rgba(12,26,51,0.15)' }}
+        aria-label="Complete subtask"
+      />
+    </motion.div>
+  )
+}
+
+// ── Subtask add form ───────────────────────────────────────────────────────────
+
+function SubtaskAddRow({ parentId, category, onAdd, onCancel }) {
+  const [text, setText]         = useState('')
+  const [priority, setPriority] = useState('Medium')
+  const [saving, setSaving]     = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setSaving(true)
+    await onAdd(parentId, { text: trimmed, priority, category })
+    setSaving(false)
+    onCancel()
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex items-center gap-2 pl-6 py-2"
+      style={{ borderTop: '1px solid rgba(12,26,51,0.04)', background: 'rgba(12,26,51,0.015)' }}
+    >
+      <div className="w-[2px] self-stretch rounded-full shrink-0" style={{ background: 'rgba(12,26,51,0.12)' }} />
+      <input
+        autoFocus
+        type="text"
+        placeholder="Sub-task description…"
+        value={text}
+        onChange={e => setText(e.target.value)}
+        className="flex-1 min-w-0 text-xs bg-white border rounded-lg px-2 py-1 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-1 focus:ring-gold"
+        style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+      />
+      <select
+        value={priority}
+        onChange={e => setPriority(e.target.value)}
+        className="text-xs bg-white border rounded-lg px-1.5 py-1 text-text-primary focus:outline-none"
+        style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+      >
+        {['High', 'Medium', 'Low'].map(p => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <button
+        type="submit"
+        disabled={saving || !text.trim()}
+        className="text-[11px] font-medium text-white px-2.5 py-1 rounded-lg disabled:opacity-50"
+        style={{ background: '#C4A24E' }}
+      >Add</button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="text-[11px] text-text-tertiary hover:text-text-secondary"
+      >✕</button>
+    </form>
+  )
+}
+
+// ── Project Card ───────────────────────────────────────────────────────────────
 
 export default function ProjectCard({
   project,
@@ -156,18 +359,36 @@ export default function ProjectCard({
   onDelete,
   onOpenEdit,
   onAddTask,
+  onAddSubtask,
   defaultExpanded,
   onEditProject,
   onDeleteProject,
   onToggleDailyTask,
 }) {
   const isDaily = project.type === 'daily'
-  const [expanded, setExpanded]           = useState(defaultExpanded ?? false)
-  const [addingTask, setAddingTask]       = useState(false)
-  const [newTaskText, setNewTaskText]     = useState('')
-  const [newTaskPriority, setNewTaskPriority] = useState('Medium')
-  const [newTaskDue, setNewTaskDue]       = useState('')
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [expanded, setExpanded]                   = useState(defaultExpanded ?? false)
+  const [addingTask, setAddingTask]               = useState(false)
+  const [addingSubtaskFor, setAddingSubtaskFor]   = useState(null)
+  const [collapsedSubtasks, setCollapsedSubtasks] = useState(new Set())
+  const [newTaskText, setNewTaskText]             = useState('')
+  const [newTaskPriority, setNewTaskPriority]     = useState('Medium')
+  const [newTaskDue, setNewTaskDue]               = useState('')
+  const [confirmDelete, setConfirmDelete]         = useState(false)
+
+  const topLevelTasks = tasks.filter(t => !t.parentId)
+  const subtaskMap    = new Map()
+  tasks.filter(t => t.parentId).forEach(t => {
+    if (!subtaskMap.has(t.parentId)) subtaskMap.set(t.parentId, [])
+    subtaskMap.get(t.parentId).push(t)
+  })
+
+  function toggleSubtasks(taskId) {
+    setCollapsedSubtasks(prev => {
+      const next = new Set(prev)
+      next.has(taskId) ? next.delete(taskId) : next.add(taskId)
+      return next
+    })
+  }
 
   const accentColor = ACCENT_COLORS[index % ACCENT_COLORS.length]
   const cardStyle   = { border: '1px solid rgba(12,26,51,0.06)' }
@@ -213,49 +434,15 @@ export default function ProjectCard({
           {/* ── Header ── */}
           <div className="px-3 pt-3 pb-2.5">
 
-            {/* Row 1: name · icons · chevron */}
-            <div className="flex items-center gap-1.5 min-w-0">
-              {/* Name — click to expand */}
-              <p
-                className="flex-1 text-[14px] font-semibold text-text-primary leading-snug truncate cursor-pointer select-none"
-                onClick={() => setExpanded(e => !e)}
-              >
+            {/* Row 1: name + chevron */}
+            <div
+              className="flex items-center gap-1.5 min-w-0 cursor-pointer select-none"
+              onClick={() => setExpanded(e => !e)}
+            >
+              <p className="flex-1 text-[14px] font-semibold text-text-primary leading-snug truncate">
                 {project.name}
               </p>
-
-              {/* Project-level actions — right of title */}
-              <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                {onEditProject && (
-                  <button
-                    title="Edit project"
-                    onClick={() => onEditProject(project)}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
-                  >
-                    <PencilIcon />
-                  </button>
-                )}
-                {onDeleteProject && (
-                  <button
-                    title={confirmDelete ? 'Click again to confirm' : 'Delete project'}
-                    onClick={() => {
-                      if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000) }
-                      else onDeleteProject(project.id)
-                    }}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg transition"
-                    style={{ color: confirmDelete ? '#C0392B' : '#8B93A1' }}
-                  >
-                    {confirmDelete
-                      ? <span className="text-[10px] font-bold leading-none">Sure?</span>
-                      : <TrashIcon />}
-                  </button>
-                )}
-              </div>
-
-              {/* Chevron — click to expand */}
-              <span
-                className="text-text-tertiary text-[10px] shrink-0 cursor-pointer select-none"
-                onClick={() => setExpanded(e => !e)}
-              >
+              <span className="text-text-tertiary text-[10px] shrink-0">
                 {expanded ? '▾' : '▶'}
               </span>
             </div>
@@ -267,20 +454,48 @@ export default function ProjectCard({
               </p>
             )}
 
-            {/* Row 2: meta */}
-            <div
-              className="flex items-center gap-1.5 mt-1 cursor-pointer select-none"
-              onClick={() => setExpanded(e => !e)}
-            >
-              <span className="text-[11px] text-text-tertiary">
-                {tasks.length} task{tasks.length !== 1 ? 's' : ''}
-              </span>
-              <StatusPill status={project.status} />
-              {isDaily && (
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: 'rgba(74,111,165,0.08)', color: '#4A6FA5' }}>
-                  ↻ Daily
+            {/* Row 2: meta + action icons */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <div
+                className="flex items-center gap-1.5 flex-1 min-w-0 cursor-pointer select-none"
+                onClick={() => setExpanded(e => !e)}
+              >
+                <span className="text-[11px] text-text-tertiary">
+                  {topLevelTasks.length} task{topLevelTasks.length !== 1 ? 's' : ''}
                 </span>
-              )}
+                <StatusPill status={project.status} />
+                {isDaily && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: 'rgba(74,111,165,0.08)', color: '#4A6FA5' }}>
+                    ↻ Daily
+                  </span>
+                )}
+              </div>
+
+              {/* Project-level actions */}
+              <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                {onEditProject && (
+                  <button
+                    title="Edit project"
+                    onClick={() => onEditProject(project)}
+                    className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+                  >
+                    <PencilIcon />
+                  </button>
+                )}
+                {onDeleteProject && (
+                  <button
+                    title={confirmDelete ? 'Click again to confirm' : 'Delete project'}
+                    onClick={() => {
+                      if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000) }
+                      else onDeleteProject(project.id)
+                    }}
+                    className="w-6 h-6 flex items-center justify-center rounded-md transition"
+                    style={{ color: confirmDelete ? '#C0392B' : '#8B93A1' }}
+                  >
+                    {confirmDelete ? <span className="text-[10px] font-bold leading-none">Sure?</span> : <TrashIcon />}
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -295,23 +510,61 @@ export default function ProjectCard({
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-4" style={divider}>
-                  {tasks.map(task => isDaily ? (
-                    <DailyTaskRow
-                      key={task.id}
-                      task={task}
-                      onToggle={onToggleDailyTask}
-                      onOpenEdit={onOpenEdit}
-                    />
-                  ) : (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      onComplete={onComplete}
-                      onDelete={onDelete}
-                      onOpenEdit={onOpenEdit}
-                    />
-                  ))}
+                <div
+                  className="px-4"
+                  style={{
+                    ...divider,
+                    ...(topLevelTasks.length > 10 ? { maxHeight: 420, overflowY: 'auto' } : {}),
+                  }}
+                >
+                  {topLevelTasks.map(task => {
+                    const subs = subtaskMap.get(task.id) ?? []
+                    const collapsed = collapsedSubtasks.has(task.id)
+                    return (
+                      <div key={task.id}>
+                        {isDaily ? (
+                          <DailyTaskRow
+                            task={task}
+                            onToggle={onToggleDailyTask}
+                            onOpenEdit={onOpenEdit}
+                            onDelete={onDelete}
+                            onAddSubtask={onAddSubtask ? () => setAddingSubtaskFor(task.id) : undefined}
+                            hasSubtasks={subs.length > 0}
+                            subtasksCollapsed={collapsed}
+                            onToggleSubtasks={() => toggleSubtasks(task.id)}
+                          />
+                        ) : (
+                          <TaskRow
+                            task={task}
+                            onComplete={onComplete}
+                            onDelete={onDelete}
+                            onOpenEdit={onOpenEdit}
+                            onAddSubtask={onAddSubtask ? () => setAddingSubtaskFor(task.id) : undefined}
+                            hasSubtasks={subs.length > 0}
+                            subtasksCollapsed={collapsed}
+                            onToggleSubtasks={() => toggleSubtasks(task.id)}
+                          />
+                        )}
+                        {addingSubtaskFor === task.id && (
+                          <SubtaskAddRow
+                            parentId={task.id}
+                            category={task.category}
+                            onAdd={onAddSubtask}
+                            onCancel={() => setAddingSubtaskFor(null)}
+                          />
+                        )}
+                        {!collapsed && subs.map(sub => (
+                          <SubtaskRow
+                            key={sub.id}
+                            task={sub}
+                            onComplete={onComplete}
+                            onDelete={onDelete}
+                            onOpenEdit={onOpenEdit}
+                          />
+                        ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </motion.div>
             )}

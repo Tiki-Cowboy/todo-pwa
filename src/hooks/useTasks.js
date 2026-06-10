@@ -41,7 +41,12 @@ export function useTasks(uid) {
 
   async function addSubtask(parentId, data) {
     const parent = tasks.find(t => t.id === parentId)
-    await fsAdd(uid, { ...data, parentId, category: parent?.category ?? data.category })
+    await fsAdd(uid, {
+      ...data,
+      parentId,
+      category:  parent?.category  ?? data.category,
+      projectId: parent?.projectId ?? null,
+    })
   }
 
   async function completeTask(taskId) {
@@ -67,7 +72,8 @@ export function useTasks(uid) {
   }
 
   async function toggleDailyTask(taskId, doneToday) {
-    const today = new Date().toISOString().split('T')[0]
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     await fsSetDailyCompletion(uid, taskId, doneToday ? null : today)
   }
 

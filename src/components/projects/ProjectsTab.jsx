@@ -6,6 +6,130 @@ import TaskEditModal from '../tasks/TaskEditModal'
 import { useToast } from '../ui/Toast'
 import { isOverdue } from '../../lib/dateUtils'
 
+// ── Manage Categories Panel ────────────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  '#5b9bd5', '#9b7fd4', '#2D8F65', '#C4A24E',
+  '#C0392B', '#e87c4a', '#4ab8b8', '#4A6FA5',
+]
+
+function ManageCategoriesPanel({ categories, onAddCategory, onDeleteCategory }) {
+  const toast = useToast()
+  const [catName, setCatName]         = useState('')
+  const [color, setColor]             = useState(PRESET_COLORS[0])
+  const [confirmCatId, setConfirmCatId] = useState(null)
+  const [saving, setSaving]           = useState(false)
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    const trimmed = catName.trim()
+    if (!trimmed) return
+    if (categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast('A category with that name already exists', 'error'); return
+    }
+    setSaving(true)
+    try {
+      await onAddCategory(trimmed, color)
+      setCatName(''); setColor(PRESET_COLORS[0])
+      toast('Category added')
+    } catch { toast('Failed to add category', 'error') }
+    finally { setSaving(false) }
+  }
+
+  async function handleDelete(cat) {
+    if (confirmCatId !== cat.id) {
+      setConfirmCatId(cat.id); setTimeout(() => setConfirmCatId(null), 3000); return
+    }
+    try {
+      await onDeleteCategory(cat.id, cat.name)
+      setConfirmCatId(null)
+      toast(`"${cat.name}" deleted — tasks moved to Uncategorized`)
+    } catch { toast('Failed to delete category', 'error') }
+  }
+
+  const panelCardStyle = { border: '1px solid rgba(12,26,51,0.06)' }
+  const divider = { borderBottom: '1px solid rgba(12,26,51,0.06)' }
+
+  return (
+    <div className="mt-2 space-y-4">
+      {/* Add form */}
+      <div className="bg-white rounded-2xl p-5" style={panelCardStyle}>
+        <p className="text-sm font-medium text-text-primary mb-4">Add Category</p>
+        <form onSubmit={handleAdd} className="space-y-3">
+          <input
+            type="text"
+            placeholder="Category name"
+            value={catName}
+            onChange={e => setCatName(e.target.value)}
+            maxLength={32}
+            className="w-full bg-page-bg border rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-gold transition"
+            style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+          />
+          <div className="flex gap-2 flex-wrap">
+            {PRESET_COLORS.map(c => (
+              <button
+                key={c} type="button" onClick={() => setColor(c)}
+                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
+                style={{ backgroundColor: c, borderColor: color === c ? '#0C1A33' : 'transparent', transform: color === c ? 'scale(1.15)' : undefined }}
+                aria-label={`Select color ${c}`}
+              />
+            ))}
+          </div>
+          <button
+            type="submit"
+            disabled={saving || !catName.trim()}
+            className="text-sm font-semibold px-5 py-2 rounded-xl text-white disabled:opacity-50"
+            style={{ background: '#C4A24E' }}
+          >
+            {saving ? 'Adding…' : 'Add Category'}
+          </button>
+        </form>
+      </div>
+
+      {/* Category list */}
+      <div className="bg-white rounded-2xl overflow-hidden" style={panelCardStyle}>
+        <div className="px-5 py-3" style={{ ...divider, background: '#F4F2ED' }}>
+          <p className="text-sm font-medium text-text-primary">Your Categories</p>
+        </div>
+        <ul>
+          <AnimatePresence initial={false}>
+            {categories.map((cat, i) => (
+              <motion.li
+                key={cat.id} layout
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                className="flex items-center justify-between px-5 py-3"
+                style={{ borderBottom: i < categories.length - 1 ? '1px solid rgba(12,26,51,0.06)' : 'none' }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className="text-sm text-text-primary">{cat.name}</span>
+                  {cat.isDefault && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full text-text-tertiary" style={{ background: 'rgba(12,26,51,0.06)' }}>
+                      default
+                    </span>
+                  )}
+                </div>
+                {!cat.isDefault && (
+                  <button
+                    onClick={() => handleDelete(cat)}
+                    className="text-xs px-2.5 py-1 rounded-lg border transition"
+                    style={confirmCatId === cat.id
+                      ? { background: '#C0392B', color: 'white', borderColor: '#C0392B' }
+                      : { background: 'transparent', color: '#8B93A1', borderColor: 'rgba(12,26,51,0.12)' }}
+                  >
+                    {confirmCatId === cat.id ? 'Sure?' : '✕ Delete'}
+                  </button>
+                )}
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const inputClass = "bg-white border rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 transition"
@@ -180,6 +304,7 @@ export default function ProjectsTab({
   projects = [],
   activeProjects,
   onAdd,
+  onAddSubtask,
   onComplete,
   onDelete,
   onUpdate,
@@ -187,12 +312,15 @@ export default function ProjectsTab({
   onUpdateProject,
   onDeleteProject,
   onToggleDailyTask,
+  onAddCategory,
+  onDeleteCategory,
 }) {
   const toast = useToast()
   const [editingTask, setEditingTask]           = useState(null)
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [editingProject, setEditingProject]     = useState(null)
   const [statusFilter, setStatusFilter]         = useState('all')
+  const [managingCats, setManagingCats]         = useState(false)
 
   // Which projects to show based on filter
   const visibleProjects = useMemo(() =>
@@ -207,11 +335,12 @@ export default function ProjectsTab({
   const projectTaskMap = useMemo(() => {
     const map = {}
     visibleProjects.forEach(p => { map[p.id] = [] })
-    topLevel.forEach(t => {
-      if (t.projectId && map[t.projectId]) map[t.projectId].push(t)
+    // Include both top-level and subtasks so ProjectCard can build the hierarchy
+    tasks.filter(t => !t.completedAt).forEach(t => {
+      if (t.projectId && map[t.projectId] !== undefined) map[t.projectId].push(t)
     })
     return map
-  }, [topLevel, visibleProjects])
+  }, [tasks, visibleProjects])
 
   // Standalone tasks only shown in All / Active view
   const standaloneTasks = useMemo(() =>
@@ -366,6 +495,7 @@ export default function ProjectsTab({
                     onDelete={handleDelete}
                     onOpenEdit={setEditingTask}
                     onAddTask={handleAdd}
+                    onAddSubtask={onAddSubtask}
                     defaultExpanded={hasOverdue}
                     onEditProject={p => { setEditingProject(p); setShowProjectModal(true) }}
                     onDeleteProject={handleDeleteProject}
@@ -377,6 +507,38 @@ export default function ProjectsTab({
           )}
         </div>
       ))}
+
+      {/* Manage Categories */}
+      <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(12,26,51,0.08)' }}>
+        <button
+          onClick={() => setManagingCats(o => !o)}
+          className="flex items-center gap-2 text-sm text-text-tertiary hover:text-text-secondary transition"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="7" cy="7" r="2" />
+            <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.93 2.93l1.41 1.41M9.66 9.66l1.41 1.41M2.93 11.07l1.41-1.41M9.66 4.34l1.41-1.41" />
+          </svg>
+          <span>Manage Categories</span>
+          <span className="text-[11px]">{managingCats ? '▾' : '▶'}</span>
+        </button>
+        <AnimatePresence initial={false}>
+          {managingCats && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <ManageCategoriesPanel
+                categories={categories}
+                onAddCategory={onAddCategory}
+                onDeleteCategory={onDeleteCategory}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <TaskEditModal
         task={editingTask}

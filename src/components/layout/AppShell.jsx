@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import NavBar from './NavBar'
+import BottomNav from './BottomNav'
 import UpdateBanner from './UpdateBanner'
 import HomeTab from '../tasks/HomeTab'
 import ReportingTab from '../reporting/ReportingTab'
@@ -10,6 +11,8 @@ import ProjectsTab from '../projects/ProjectsTab'
 import { useTasks } from '../../hooks/useTasks'
 import { useCategories } from '../../hooks/useCategories'
 import { useProjects } from '../../hooks/useProjects'
+import { useDailyReset } from '../../hooks/useDailyReset'
+import { SHOW_CLAUDE_FAB } from '../../config'
 
 export default function AppShell({ user, onSignOut }) {
   const [activeTab, setActiveTab]         = useState('home')
@@ -25,6 +28,13 @@ export default function AppShell({ user, onSignOut }) {
 
   const loading = tasksLoading || catsLoading || projectsLoading
 
+  const dailyProjectIds = useMemo(
+    () => new Set(activeProjects.filter(p => p.type === 'daily').map(p => p.id)),
+    [activeProjects]
+  )
+
+  useDailyReset(user.uid, tasks, dailyProjectIds)
+
   function renderTab() {
     if (loading) return <SkeletonLoader />
     switch (activeTab) {
@@ -35,6 +45,7 @@ export default function AppShell({ user, onSignOut }) {
             categories={categories}
             activeProjects={activeProjects}
             onComplete={completeTask}
+            onCompleteSubtask={completeSubtask}
             onUpdate={updateTask}
             onToggleDailyTask={toggleDailyTask}
           />
@@ -47,6 +58,7 @@ export default function AppShell({ user, onSignOut }) {
             projects={projects}
             activeProjects={activeProjects}
             onAdd={addTask}
+            onAddSubtask={addSubtask}
             onComplete={(id, parentId) => parentId ? completeSubtask(id, parentId) : completeTask(id)}
             onDelete={deleteTask}
             onUpdate={updateTask}
@@ -54,10 +66,12 @@ export default function AppShell({ user, onSignOut }) {
             onUpdateProject={updateProject}
             onDeleteProject={deleteProject}
             onToggleDailyTask={toggleDailyTask}
+            onAddCategory={addCategory}
+            onDeleteCategory={deleteCategory}
           />
         )
       case 'reporting':
-        return <ReportingTab completedTasks={completedTasks} categories={categories} />
+        return <ReportingTab completedTasks={completedTasks} categories={categories} projects={projects} />
       case 'configure':
         return (
           <ConfigureTab
@@ -77,14 +91,9 @@ export default function AppShell({ user, onSignOut }) {
 
   return (
     <div className="min-h-screen bg-page-bg flex flex-col">
-      <NavBar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        user={user}
-        onSignOut={onSignOut}
-      />
+      <NavBar user={user} onSignOut={onSignOut} activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 pt-6 pb-[88px] md:pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -98,21 +107,25 @@ export default function AppShell({ user, onSignOut }) {
         </AnimatePresence>
       </main>
 
-      <motion.button
-        onClick={() => setAssistantOpen(true)}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-5 z-40 w-14 h-14 rounded-full shadow-2xl text-2xl flex items-center justify-center transition-colors"
-        style={{ background: '#C4A24E' }}
-        aria-label="Open assistant"
-      >
-        🤠
-      </motion.button>
+      {SHOW_CLAUDE_FAB && (
+        <motion.button
+          onClick={() => setAssistantOpen(true)}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
+          className="fixed bottom-6 right-5 z-40 w-14 h-14 rounded-full shadow-2xl text-2xl flex items-center justify-center transition-colors"
+          style={{ background: '#C4A24E' }}
+          aria-label="Open assistant"
+        >
+          🤠
+        </motion.button>
+      )}
 
       <AssistantPanel
         isOpen={assistantOpen}
         onClose={() => setAssistantOpen(false)}
       />
+
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
       <UpdateBanner />
     </div>
