@@ -6,6 +6,7 @@ import {
   deleteTask as fsDelete,
   updateTask as fsUpdate,
   setDailyTaskCompletion as fsSetDailyCompletion,
+  spawnFollowUpTask as fsSpawnFollowUp,
 } from '../lib/firestore'
 
 export function useTasks(uid) {
@@ -49,11 +50,36 @@ export function useTasks(uid) {
     })
   }
 
+  // If `task` is the non-final step of an FU chain, silently spawns the next step.
+  // If it's the final step, returns chain info for the End-of-Chain modal; otherwise null.
+  async function handleFuChainCompletion(task) {
+    const chain = task?.fuChain
+    if (!chain?.enabled) return null
+    const isFinal = chain.stepIndex >= chain.sequence.length - 1
+    if (!isFinal) {
+      await fsSpawnFollowUp(uid, { fuChain: chain, projectId: task.projectId, category: task.category, priority: task.priority })
+      return null
+    }
+    return {
+      chainComplete: true,
+      baseTitle: chain.baseTitle,
+      sequence: chain.sequence,
+      stepIndex: chain.stepIndex,
+      templateId: chain.templateId ?? null,
+      projectId: task.projectId ?? null,
+      category: task.category,
+      priority: task.priority,
+    }
+  }
+
   async function completeTask(taskId) {
+    const task = tasks.find(t => t.id === taskId)
     await fsComplete(uid, taskId, subtaskIds(taskId))
+    return handleFuChainCompletion(task)
   }
 
   async function completeSubtask(taskId, parentId) {
+    const task = tasks.find(t => t.id === taskId)
     await fsComplete(uid, taskId, [])
     if (parentId) {
       const siblings = tasks.filter(t => t.parentId === parentId && t.id !== taskId)
@@ -61,6 +87,19 @@ export function useTasks(uid) {
         await fsComplete(uid, parentId, [])
       }
     }
+    return handleFuChainCompletion(task)
+  }
+
+  // "Add another follow-up" from the End-of-Chain modal: extends the finished
+  // chain's sequence by one more interval and spawns that final step.
+  async function extendFuChain(chainInfo, days) {
+    const sequence = [...chainInfo.sequence, days]
+    await fsSpawnFollowUp(uid, {
+      fuChain: { baseTitle: chainInfo.baseTitle, sequence, stepIndex: chainInfo.stepIndex, templateId: chainInfo.templateId },
+      projectId: chainInfo.projectId,
+      category: chainInfo.category,
+      priority: chainInfo.priority,
+    })
   }
 
   async function deleteTask(taskId) {
@@ -88,5 +127,6 @@ export function useTasks(uid) {
     deleteTask,
     updateTask,
     toggleDailyTask,
+    extendFuChain,
   }
 }

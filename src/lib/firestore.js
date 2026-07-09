@@ -5,14 +5,20 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 
-const tasksRef      = uid => collection(db, 'users', uid, 'tasks')
-const categoriesRef = uid => collection(db, 'users', uid, 'categories')
-const projectsRef   = uid => collection(db, 'users', uid, 'projects')
-const userDocRef    = uid => doc(db, 'users', uid)
+const tasksRef       = uid => collection(db, 'users', uid, 'tasks')
+const categoriesRef  = uid => collection(db, 'users', uid, 'categories')
+const projectsRef    = uid => collection(db, 'users', uid, 'projects')
+const fuTemplatesRef = uid => collection(db, 'users', uid, 'fuTemplates')
+const userDocRef     = uid => doc(db, 'users', uid)
 
-function localDateStr() {
+function localDateStr(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function addDaysISO(days) {
   const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  d.setDate(d.getDate() + days)
+  return localDateStr(d)
 }
 
 // ── Subscriptions ─────────────────────────────────────────────────────────────
@@ -40,12 +46,30 @@ export function subscribeToCategories(uid, callback) {
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
-export async function addTask(uid, { text, priority, category, dueDate = null, parentId = null, projectId = null }) {
+export async function addTask(uid, { text, priority, category, dueDate = null, parentId = null, projectId = null, fuChain = null }) {
   await addDoc(tasksRef(uid), {
-    text, priority, category, dueDate, parentId, projectId,
+    text, priority, category, dueDate, parentId, projectId, fuChain,
     createdAt: serverTimestamp(),
     completedAt: null,
     lastCompletedDate: null,
+  })
+}
+
+// Spawns the next step of a Follow-Up chain, based on the task that was just completed.
+export async function spawnFollowUpTask(uid, { fuChain, projectId, category, priority }) {
+  const nextIndex = fuChain.stepIndex + 1
+  await addTask(uid, {
+    text: `FU: ${fuChain.baseTitle}`,
+    priority, category,
+    dueDate: addDaysISO(fuChain.sequence[nextIndex]),
+    projectId: projectId ?? null,
+    fuChain: {
+      enabled: true,
+      baseTitle: fuChain.baseTitle,
+      sequence: fuChain.sequence,
+      stepIndex: nextIndex,
+      templateId: fuChain.templateId ?? null,
+    },
   })
 }
 
@@ -92,9 +116,14 @@ export function subscribeToProjects(uid, callback) {
   })
 }
 
-export async function addProject(uid, { name, categoryName, status = 'active', description = '', type = 'standard' }) {
+export async function addProject(uid, {
+  name, categoryName, status = 'active', description = '', type = 'standard',
+  statusNote = '',
+  dealName = null, dealUrl = null, contactName = null, contactUrl = null,
+}) {
   await addDoc(projectsRef(uid), {
-    name, categoryName, status, description, type,
+    name, categoryName, status, description, type, statusNote,
+    dealName, dealUrl, contactName, contactUrl,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -114,6 +143,22 @@ export async function deleteProject(uid, projectId) {
   snap.forEach(d => batch.update(d.ref, { projectId: null }))
   batch.delete(doc(projectsRef(uid), projectId))
   await batch.commit()
+}
+
+// ── FU Templates ──────────────────────────────────────────────────────────────
+
+export function subscribeToFuTemplates(uid, callback) {
+  return onSnapshot(query(fuTemplatesRef(uid), orderBy('createdAt', 'asc')), snapshot => {
+    callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+  })
+}
+
+export async function addFuTemplate(uid, { name, sequence }) {
+  await addDoc(fuTemplatesRef(uid), { name, sequence, createdAt: serverTimestamp() })
+}
+
+export async function deleteFuTemplate(uid, templateId) {
+  await deleteDoc(doc(fuTemplatesRef(uid), templateId))
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────

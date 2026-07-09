@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDueDate, isOverdue } from '../../lib/dateUtils'
 
@@ -14,12 +15,90 @@ const STATUS_STYLE = {
   completed: { bg: 'rgba(74,111,165,0.1)',   color: '#4A6FA5' },
 }
 
-function StatusPill({ status }) {
+const STATUS_OPTIONS_LIST = [
+  { value: 'active',    label: 'Active' },
+  { value: 'on-hold',   label: 'On Hold' },
+  { value: 'archived',  label: 'Archived' },
+  { value: 'completed', label: 'Completed' },
+]
+
+function StatusPill({ status, onStatusChange }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos]   = useState({ top: 0, left: 0 })
+  const btnRef = useRef(null)
   const s = STATUS_STYLE[status] ?? STATUS_STYLE.active
+  const label = status === 'on-hold' ? 'On Hold' : status.charAt(0).toUpperCase() + status.slice(1)
+
+  function handleOpen(e) {
+    e.stopPropagation()
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ top: r.top, left: r.left })
+    }
+    setOpen(o => !o)
+  }
+
+  function handleSelect(e, value) {
+    e.stopPropagation()
+    onStatusChange?.(value)
+    setOpen(false)
+  }
+
+  if (!onStatusChange) {
+    return (
+      <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: s.bg, color: s.color }}>
+        {label}
+      </span>
+    )
+  }
+
   return (
-    <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: s.bg, color: s.color }}>
-      {status === 'on-hold' ? 'On Hold' : status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
+    <div onClick={e => e.stopPropagation()}>
+      <button
+        ref={btnRef}
+        onClick={handleOpen}
+        className="text-[11px] font-medium px-2 py-0.5 rounded-lg cursor-pointer transition-opacity hover:opacity-75"
+        style={{ background: s.bg, color: s.color }}
+      >
+        {label}
+      </button>
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 999 }} onClick={() => setOpen(false)} />
+          <div
+            className="fixed bg-white rounded-xl shadow-lg py-1 min-w-[130px]"
+            style={{
+              zIndex: 1000,
+              top: pos.top,
+              left: pos.left,
+              transform: 'translateY(calc(-100% - 4px))',
+              border: '1px solid rgba(12,26,51,0.1)',
+            }}
+          >
+            {STATUS_OPTIONS_LIST.map(opt => {
+              const os = STATUS_STYLE[opt.value] ?? STATUS_STYLE.active
+              return (
+                <button
+                  key={opt.value}
+                  onClick={e => handleSelect(e, opt.value)}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-black/5 transition"
+                >
+                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: os.bg, color: os.color }}>
+                    {opt.label}
+                  </span>
+                  {opt.value === status && (
+                    <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto text-text-tertiary">
+                      <polyline points="1,4.5 3.5,7 8,1.5" />
+                    </svg>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </>,
+        document.body
+      )}
+    </div>
   )
 }
 
@@ -49,6 +128,15 @@ function PlusIcon({ size = 12 }) {
   )
 }
 
+function ChainLinkIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a2.5 2.5 0 003.5.2l1.8-1.8a2.5 2.5 0 00-3.5-3.5L6.7 4" />
+      <path d="M8 6a2.5 2.5 0 00-3.5-.2L2.7 7.6a2.5 2.5 0 003.5 3.5L7.3 10" />
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -60,6 +148,34 @@ function TrashIcon() {
 }
 
 const TODAY = new Date().toISOString().split('T')[0]
+
+function HubSpotLinks({ dealName, dealUrl, contactName, contactUrl }) {
+  const hasDeal    = !!dealUrl
+  const hasContact = !!contactUrl
+  if (!hasDeal && !hasContact) return null
+  return (
+    <div className="flex flex-wrap gap-2 mt-0.5">
+      {hasDeal && (
+        <a
+          href={dealUrl} target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="text-[10px] font-medium text-[#4A6FA5] hover:underline"
+        >
+          {dealName || 'HubSpot Deal'} ↗
+        </a>
+      )}
+      {hasContact && (
+        <a
+          href={contactUrl} target="_blank" rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="text-[10px] font-medium text-[#4A6FA5] hover:underline"
+        >
+          {contactName || 'HubSpot Contact'} ↗
+        </a>
+      )}
+    </div>
+  )
+}
 
 // ── Daily task row ─────────────────────────────────────────────────────────────
 
@@ -173,6 +289,9 @@ function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubt
       <div className="w-[3px] self-stretch rounded-full shrink-0 mt-0.5" style={{ background: barColor }} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
+          {task.fuChain?.enabled && (
+            <span title="Follow-up chain" className="text-text-tertiary shrink-0"><ChainLinkIcon /></span>
+          )}
           <p className="flex-1 text-sm text-text-primary leading-snug break-words">{task.text}</p>
           {hasSubtasks && (
             <button
@@ -189,6 +308,7 @@ function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubt
             {due.overdue && '⚠ '}{due.label}
           </p>
         )}
+        <HubSpotLinks dealName={task.dealName} dealUrl={task.dealUrl} contactName={task.contactName} contactUrl={task.contactUrl} />
       </div>
       <div className="flex items-center gap-0.5 shrink-0">
         <span
@@ -262,6 +382,9 @@ function SubtaskRow({ task, onComplete, onDelete, onOpenEdit }) {
       style={{ borderTop: '1px solid rgba(12,26,51,0.03)' }}
     >
       <div className="w-[2px] self-stretch rounded-full shrink-0" style={{ background: 'rgba(12,26,51,0.12)' }} />
+      {task.fuChain?.enabled && (
+        <span title="Follow-up chain" className="text-text-tertiary shrink-0"><ChainLinkIcon /></span>
+      )}
       <p className="flex-1 text-xs text-text-secondary leading-snug break-words">{task.text}</p>
       <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -363,6 +486,7 @@ export default function ProjectCard({
   defaultExpanded,
   onEditProject,
   onDeleteProject,
+  onUpdateProject,
   onToggleDailyTask,
 }) {
   const isDaily = project.type === 'daily'
@@ -442,9 +566,14 @@ export default function ProjectCard({
               <p className="flex-1 text-[14px] font-semibold text-text-primary leading-snug truncate">
                 {project.name}
               </p>
-              <span className="text-text-tertiary text-[10px] shrink-0">
-                {expanded ? '▾' : '▶'}
-              </span>
+              <svg
+                width="10" height="10" viewBox="0 0 10 10" fill="none"
+                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                className="text-text-tertiary shrink-0"
+                style={{ transition: 'transform 175ms ease', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+              >
+                <polyline points="2,2 7,5 2,8" />
+              </svg>
             </div>
 
             {/* Description */}
@@ -453,6 +582,19 @@ export default function ProjectCard({
                 {project.description}
               </p>
             )}
+
+            {/* Status Note */}
+            {project.statusNote && (
+              <div className="mt-1.5">
+                <p className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: '#C4A24E' }}>
+                  Status
+                </p>
+                <p className="text-[12px] text-text-secondary mt-0.5 leading-snug line-clamp-2">
+                  {project.statusNote}
+                </p>
+              </div>
+            )}
+            <HubSpotLinks dealName={project.dealName} dealUrl={project.dealUrl} contactName={project.contactName} contactUrl={project.contactUrl} />
 
             {/* Row 2: meta + action icons */}
             <div className="flex items-center gap-1.5 mt-1">
@@ -463,7 +605,10 @@ export default function ProjectCard({
                 <span className="text-[11px] text-text-tertiary">
                   {topLevelTasks.length} task{topLevelTasks.length !== 1 ? 's' : ''}
                 </span>
-                <StatusPill status={project.status} />
+                <StatusPill
+                  status={project.status}
+                  onStatusChange={onUpdateProject ? newStatus => onUpdateProject(project.id, { status: newStatus }) : undefined}
+                />
                 {isDaily && (
                   <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: 'rgba(74,111,165,0.08)', color: '#4A6FA5' }}>
                     ↻ Daily
@@ -473,6 +618,15 @@ export default function ProjectCard({
 
               {/* Project-level actions */}
               <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                {onAddTask && (
+                  <button
+                    title="Add task"
+                    onClick={openAddTask}
+                    className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+                  >
+                    <PlusIcon />
+                  </button>
+                )}
                 {onEditProject && (
                   <button
                     title="Edit project"
@@ -514,7 +668,8 @@ export default function ProjectCard({
                   className="px-4"
                   style={{
                     ...divider,
-                    ...(topLevelTasks.length > 10 ? { maxHeight: 420, overflowY: 'auto' } : {}),
+                    maxHeight: '320px',
+                    overflowY: 'auto',
                   }}
                 >
                   {topLevelTasks.map(task => {
@@ -570,9 +725,9 @@ export default function ProjectCard({
             )}
           </AnimatePresence>
 
-          {/* ── Always-visible bottom strip ── */}
-          <div className="px-4" style={divider}>
-            {addingTask ? (
+          {/* ── Task add form (shown when triggered from header +) ── */}
+          {addingTask && (
+            <div className="px-4" style={divider}>
               <form onSubmit={handleQuickAdd} className="flex flex-col gap-2 py-2.5">
                 <input
                   autoFocus
@@ -615,15 +770,8 @@ export default function ProjectCard({
                   </button>
                 </div>
               </form>
-            ) : (
-              <button
-                onClick={openAddTask}
-                className="flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition py-2.5 w-full"
-              >
-                <span className="text-base leading-none">+</span> Add task
-              </button>
-            )}
-          </div>
+            </div>
+          )}
 
         </div>
       </div>

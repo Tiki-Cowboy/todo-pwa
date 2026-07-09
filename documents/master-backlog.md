@@ -37,6 +37,22 @@
 | FEAT-015 | Bottom Nav + Configure Collapsed into Projects | Bottom nav (Today / Projects / Reporting) with SVG icons; navy bg, gold active state, safe-area inset padding. Top NavBar simplified to wordmark + Sign Out. On desktop (`md+`) tab buttons remain in the top bar; BottomNav hidden via `md:hidden`. Manage Categories panel (gear icon, AnimatePresence) at bottom of Projects tab replaces standalone Configure tab. |
 | FEAT-016 | Parent-Child Subtasks (Projects + Today) | `parentId` field on task docs. ProjectCard: "+ Sub" icon on each task row opens inline SubtaskAddRow; SubtaskRow renders indented below parent with its own edit/delete icons. Completing all children auto-completes parent. Today tab: subtasks rendered indented below parent in the Due & Overdue list with per-subtask complete buttons. Subtask rows collapsible via inline ▾/▶ toggle. |
 | FEAT-017 | Icon Action Buttons | All text-based task action buttons (Edit / Del / + Sub) replaced with SVG icons: pencil for edit, × (soft red) for delete, + for add sub-task. Tooltip via `title` attribute. Buttons fade in on row hover. Delete still requires two clicks (first click turns icon bright red + updates tooltip). |
+| BUG-008 | Expand Arrow Chevron Fix | Replaced invisible `▾` text char with an SVG chevron that rotates 90° (175ms ease) on expand. No dot in either state. |
+| BUG-009 | Add Task → + Icon in Card Header | Moved Add Task trigger to a `+` icon in the project card header (left of pencil). Removed the always-visible bottom strip button; form still renders inline when triggered. |
+| BUG-010 | Due & Overdue Grouped by Category | Due & Overdue panel on Today tab now groups tasks under category sub-headers (same style as Dailies), sorted by due date within each group. |
+| BUG-011 | Default Project Filter = Active | `statusFilter` state initialises to `'active'` instead of `'all'`. |
+| BUG-012 | Celebration Banner Centered | `CelebrationBanner` now uses `fixed inset-0 flex items-center justify-center` — truly centered on screen, no longer bottom-anchored. |
+| BUG-013 | Reporting Table Header Polish | Completed Tasks table header: white background, bold (`font-semibold`) black text, heavier border (`1.5px`). Card border/shadow increased. |
+| BUG-014 | Chart Card Borders Restored | `ChartCard` in Charts.jsx replaced `bg-surface border-border` (unresolved tokens) with `bg-white` + inline `1px solid` border. `text-text` / `text-text-muted` tokens fixed to `text-text-primary` / `text-text-tertiary`. |
+| BUG-015 | Project Card Max-Height | Task list container always caps at `maxHeight: 320px, overflowY: auto` — no longer gated on task count. |
+| BUG-016 | Status Pill Inline Picker | `StatusPill` is now interactive: click opens a portal-rendered `position: fixed` dropdown (escapes `overflow-hidden`) listing all four statuses. Selection writes to Firestore immediately via `onUpdateProject`. |
+| FEAT-021 | General Grouping for Project-less Tasks | `+` icon on each category header opens an inline `GeneralTaskAddRow` (null `projectId`). Project-less tasks render under a "General" sub-label within their category on the Projects tab, below project cards. |
+| FEAT-022 | Completed Today Panel | Bottom panel on Today tab shows tasks completed today, grouped by category with dividers, green left-bar accent, and completion time. Panel hidden when none. `completedTasks` prop threaded from AppShell → HomeTab. |
+| FEAT-023 | HubSpot Deal & Contact Links | Four optional fields (dealName, dealUrl, contactName, contactUrl) added to TaskEditModal and ProjectModal with URL format validation. Links render as `↗` hyperlinks on task rows (ProjectCard + TodayTaskRow) and in project card headers. Stored in Firestore via existing `updateTask` / `updateProject`. |
+| FEAT-024 | Per-Category "New Project" Outline Card | Top-level `NewProjectPanel` bar removed. Each category's project grid now ends with a dashed outline card (`+` / "New project"). Clicking it opens `ProjectModal` pre-set to that category via new `defaultCategoryName` prop. |
+| FEAT-025 | Project Status Note | `statusNote` field on projects, distinct from the existing `description` (FEAT-005). `ProjectModal`: "Status Note" textarea below Description with a live 500-char counter (soft limit, not blocked). `ProjectCard`: renders below description with a gold "STATUS" eyebrow label, `line-clamp-2`, hidden entirely when empty. Along the way, fixed a pre-existing bug where `addProject` only forwarded a fixed field subset — new projects were silently dropping HubSpot fields (and would have dropped `statusNote`) on creation; create/update now pass the full form payload through. |
+| FEAT-026 | Follow-Up (FU) Reminder Chains | `fuChain` field on tasks + new `fuTemplates` collection. `TaskEditModal`: toggle + chip-based sequence builder (`+X days ✕`, template dropdown with confirm-before-overwrite) — toggle lives in the edit modal only, not the lightweight inline quick-add rows, matching how HubSpot fields are scoped. Completing a non-final FU task silently spawns the next step (`useTasks` `completeTask`/`completeSubtask`); the final step surfaces `EndOfChainModal` ("Add another follow-up" / "Close out") rendered from `AppShell`. Chain-link icon on FU task rows in `ProjectCard` and `HomeTab` (incl. subtasks). "Follow-Up Templates" management panel added next to Manage Categories in the Projects tab (Configure tab is dead code post-FEAT-015, so templates live where Categories already do). Fixed a nested-`<form>` bug in the "+ Add step" control (both in the modal and the templates panel) that was causing a full page reload/navigation on save instead of saving. |
+| FEAT-027 | Project Cards Sorted Alphabetically | `projectsByCategory` in `ProjectsTab` now sorts each category's project list by name (`localeCompare`) instead of Firestore creation order. |
 
 ---
 
@@ -77,8 +93,9 @@ Build a remote MCP server that exposes the user's Firestore task and project dat
 The Today tab exists and shows overdue + due-today tasks and the Daily Checklist. The following acceptance criteria from the original spec are still outstanding.
 
 **Remaining:**
-- Completed Today panel: tasks completed today shown with completion time; panel hidden entirely if no tasks completed yet today
 - `pinnedToday` flag: "Add to today" pins any task to the Due & Overdue panel regardless of due date; flag resets on first app load after midnight
+
+*Note: Completed Today panel extracted to FEAT-022 with fuller spec.*
 
 ---
 

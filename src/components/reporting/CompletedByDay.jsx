@@ -36,8 +36,8 @@ export default function CompletedByDay({ tasks, projects }) {
   }, [tasks])
 
   const cardStyle = {
-    border: '1px solid rgba(12,26,51,0.14)',
-    boxShadow: '0 1px 4px rgba(12,26,51,0.07)',
+    border: '1.5px solid rgba(12,26,51,0.18)',
+    boxShadow: '0 2px 8px rgba(12,26,51,0.10)',
   }
   const gridStyle = { display: 'grid', gridTemplateColumns: COLS, gap: '0 12px', alignItems: 'center' }
 
@@ -61,15 +61,15 @@ export default function CompletedByDay({ tasks, projects }) {
             top: 0,
             zIndex: 3,
             height: `${THEAD_H}px`,
-            background: '#F4F2ED',
-            borderBottom: '1px solid rgba(12,26,51,0.08)',
+            background: 'white',
+            borderBottom: '1.5px solid rgba(12,26,51,0.14)',
             padding: '0 20px',
           }}
         >
-          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">Title</span>
-          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">Project</span>
-          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">Priority</span>
-          <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">Completed</span>
+          <span className="text-xs font-semibold text-text-primary uppercase tracking-[1px]">Title</span>
+          <span className="text-xs font-semibold text-text-primary uppercase tracking-[1px]">Project</span>
+          <span className="text-xs font-semibold text-text-primary uppercase tracking-[1px]">Priority</span>
+          <span className="text-xs font-semibold text-text-primary uppercase tracking-[1px]">Completed</span>
         </div>
 
         {/* Day groups */}

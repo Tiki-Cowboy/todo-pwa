@@ -130,11 +130,208 @@ function ManageCategoriesPanel({ categories, onAddCategory, onDeleteCategory }) 
   )
 }
 
+// ── Manage FU Templates Panel ────────────────────────────────────────────────────
+
+function ManageFuTemplatesPanel({ templates, onAddTemplate, onDeleteTemplate }) {
+  const toast = useToast()
+  const [name, setName]                 = useState('')
+  const [sequence, setSequence]         = useState([])
+  const [addingStep, setAddingStep]     = useState(false)
+  const [newStepDays, setNewStepDays]   = useState('')
+  const [confirmId, setConfirmId]       = useState(null)
+  const [saving, setSaving]             = useState(false)
+
+  function handleAddStep() {
+    const n = parseInt(newStepDays, 10)
+    if (!n || n < 1) return
+    setSequence(s => [...s, n])
+    setNewStepDays('')
+    setAddingStep(false)
+  }
+
+  function removeStep(i) {
+    setSequence(s => s.filter((_, idx) => idx !== i))
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    const trimmed = name.trim()
+    if (!trimmed || sequence.length === 0) return
+    setSaving(true)
+    try {
+      await onAddTemplate(trimmed, sequence)
+      setName(''); setSequence([])
+      toast('Template added')
+    } catch { toast('Failed to add template', 'error') }
+    finally { setSaving(false) }
+  }
+
+  async function handleDelete(tpl) {
+    if (confirmId !== tpl.id) {
+      setConfirmId(tpl.id); setTimeout(() => setConfirmId(null), 3000); return
+    }
+    try {
+      await onDeleteTemplate(tpl.id)
+      setConfirmId(null)
+      toast(`"${tpl.name}" deleted`)
+    } catch { toast('Failed to delete template', 'error') }
+  }
+
+  const panelCardStyle = { border: '1px solid rgba(12,26,51,0.06)' }
+  const divider = { borderBottom: '1px solid rgba(12,26,51,0.06)' }
+
+  return (
+    <div className="mt-2 space-y-4">
+      {/* Add form */}
+      <div className="bg-white rounded-2xl p-5" style={panelCardStyle}>
+        <p className="text-sm font-medium text-text-primary mb-4">Add Template</p>
+        <form onSubmit={handleAdd} className="space-y-3">
+          <input
+            type="text"
+            placeholder="Template name, e.g. Weekly then taper"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full bg-page-bg border rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-gold transition"
+            style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+          />
+          <div className="flex flex-wrap items-center gap-1.5">
+            {sequence.map((days, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-text-primary"
+                style={{ background: '#F4F2ED', border: '1px solid rgba(12,26,51,0.12)' }}
+              >
+                +{days} days
+                <button type="button" onClick={() => removeStep(i)} className="text-text-tertiary hover:text-red-500 leading-none">✕</button>
+              </span>
+            ))}
+            {addingStep ? (
+              <div className="inline-flex items-center gap-1">
+                <input
+                  autoFocus
+                  type="number"
+                  min="1"
+                  value={newStepDays}
+                  onChange={e => setNewStepDays(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddStep() } }}
+                  placeholder="days"
+                  className="w-16 text-xs bg-page-bg border rounded-lg px-2 py-1 text-text-primary focus:outline-none focus:ring-2 focus:ring-gold"
+                  style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+                />
+                <button type="button" onClick={handleAddStep} className="text-xs font-medium text-white px-2 py-1 rounded-lg" style={{ background: '#C4A24E' }}>Add</button>
+                <button type="button" onClick={() => { setAddingStep(false); setNewStepDays('') }} className="text-xs text-text-tertiary hover:text-text-secondary">✕</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setAddingStep(true)} className="text-xs font-medium text-text-tertiary hover:text-text-secondary px-1.5 py-1">
+                + Add step
+              </button>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={saving || !name.trim() || sequence.length === 0}
+            className="text-sm font-semibold px-5 py-2 rounded-xl text-white disabled:opacity-50"
+            style={{ background: '#C4A24E' }}
+          >
+            {saving ? 'Adding…' : 'Add Template'}
+          </button>
+        </form>
+      </div>
+
+      {/* Template list */}
+      {templates.length > 0 && (
+        <div className="bg-white rounded-2xl overflow-hidden" style={panelCardStyle}>
+          <div className="px-5 py-3" style={{ ...divider, background: '#F4F2ED' }}>
+            <p className="text-sm font-medium text-text-primary">Your Templates</p>
+          </div>
+          <ul>
+            <AnimatePresence initial={false}>
+              {templates.map((tpl, i) => (
+                <motion.li
+                  key={tpl.id} layout
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }}
+                  className="flex items-center justify-between px-5 py-3"
+                  style={{ borderBottom: i < templates.length - 1 ? '1px solid rgba(12,26,51,0.06)' : 'none' }}
+                >
+                  <div>
+                    <p className="text-sm text-text-primary">{tpl.name}</p>
+                    <p className="text-xs text-text-tertiary mt-0.5">{tpl.sequence.join(', ')} days</p>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(tpl)}
+                    className="text-xs px-2.5 py-1 rounded-lg border transition"
+                    style={confirmId === tpl.id
+                      ? { background: '#C0392B', color: 'white', borderColor: '#C0392B' }
+                      : { background: 'transparent', color: '#8B93A1', borderColor: 'rgba(12,26,51,0.12)' }}
+                  >
+                    {confirmId === tpl.id ? 'Sure?' : '✕ Delete'}
+                  </button>
+                </motion.li>
+              ))}
+            </AnimatePresence>
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const inputClass = "bg-white border rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 transition"
 const inputBorder = { borderColor: 'rgba(12, 26, 51, 0.12)', '--tw-ring-color': '#C4A24E' }
 const cardStyle = { border: '1px solid rgba(12,26,51,0.06)' }
+
+// ── General Task Add Row ───────────────────────────────────────────────────────
+
+function GeneralTaskAddRow({ categoryName, onAdd, onCancel }) {
+  const [text, setText]         = useState('')
+  const [priority, setPriority] = useState('Medium')
+  const [saving, setSaving]     = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setSaving(true)
+    await onAdd({ text: trimmed, priority, category: categoryName, projectId: null })
+    setSaving(false)
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="flex items-center gap-2 py-2.5"
+      style={{ borderTop: '1px solid rgba(12,26,51,0.04)' }}
+    >
+      <input
+        autoFocus
+        type="text"
+        placeholder="Task description…"
+        value={text}
+        onChange={e => setText(e.target.value)}
+        className="flex-1 min-w-0 text-sm bg-page-bg border rounded-lg px-3 py-1.5 text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-gold"
+        style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+      />
+      <select
+        value={priority}
+        onChange={e => setPriority(e.target.value)}
+        className="text-xs bg-page-bg border rounded-lg px-2 py-1.5 text-text-primary focus:outline-none"
+        style={{ borderColor: 'rgba(12,26,51,0.12)' }}
+      >
+        {['High', 'Medium', 'Low'].map(p => <option key={p} value={p}>{p}</option>)}
+      </select>
+      <button
+        type="submit"
+        disabled={saving || !text.trim()}
+        className="text-xs font-medium text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+        style={{ background: '#C4A24E' }}
+      >Add</button>
+      <button type="button" onClick={onCancel} className="text-xs text-text-tertiary hover:text-text-secondary">✕</button>
+    </form>
+  )
+}
 
 // ── Hero Card ──────────────────────────────────────────────────────────────────
 
@@ -303,6 +500,7 @@ export default function ProjectsTab({
   categories,
   projects = [],
   activeProjects,
+  fuTemplates = [],
   onAdd,
   onAddSubtask,
   onComplete,
@@ -314,13 +512,18 @@ export default function ProjectsTab({
   onToggleDailyTask,
   onAddCategory,
   onDeleteCategory,
+  onAddFuTemplate,
+  onDeleteFuTemplate,
 }) {
   const toast = useToast()
-  const [editingTask, setEditingTask]           = useState(null)
-  const [showProjectModal, setShowProjectModal] = useState(false)
-  const [editingProject, setEditingProject]     = useState(null)
-  const [statusFilter, setStatusFilter]         = useState('all')
-  const [managingCats, setManagingCats]         = useState(false)
+  const [editingTask, setEditingTask]                   = useState(null)
+  const [showProjectModal, setShowProjectModal]         = useState(false)
+  const [editingProject, setEditingProject]             = useState(null)
+  const [newProjectCategory, setNewProjectCategory]     = useState('')
+  const [addingTaskForCategory, setAddingTaskForCategory] = useState(null)
+  const [statusFilter, setStatusFilter]                 = useState('active')
+  const [managingCats, setManagingCats]                 = useState(false)
+  const [managingFu, setManagingFu]                     = useState(false)
 
   // Which projects to show based on filter
   const visibleProjects = useMemo(() =>
@@ -365,6 +568,7 @@ export default function ProjectsTab({
       if (!map[p.categoryName]) map[p.categoryName] = []
       map[p.categoryName].push(p)
     })
+    Object.values(map).forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
     return map
   }, [visibleProjects])
 
@@ -380,9 +584,9 @@ export default function ProjectsTab({
     try { await onAdd(data) } catch { toast('Failed to add task', 'error') }
   }
 
-  async function handleAddProject({ name, categoryName, status, description, type }) {
+  async function handleAddProject(data) {
     try {
-      await onAddProject(name, categoryName, status, description, type)
+      await onAddProject(data)
       toast('Project created')
     } catch { toast('Failed to create project', 'error') }
   }
@@ -400,6 +604,10 @@ export default function ProjectsTab({
       await onDeleteProject(projectId)
       toast('Project deleted')
     } catch { toast('Failed to delete project', 'error') }
+  }
+
+  async function handleQuickUpdateProject(projectId, updates) {
+    try { await onUpdateProject(projectId, updates) } catch { toast('Failed to update project', 'error') }
   }
 
   async function handleComplete(taskId, parentId) {
@@ -427,84 +635,125 @@ export default function ProjectsTab({
 
       <FilterToggle value={statusFilter} onChange={setStatusFilter} />
 
-      <NewProjectPanel categories={categories} onSave={handleAddProject} />
-
       {isEmpty && (
         <div className="flex flex-col items-center py-12 text-text-tertiary gap-3">
           <span className="text-5xl">🗂️</span>
           <p className="text-lg text-text-secondary">
             {statusFilter === 'all' ? 'No projects yet.' : `No ${statusFilter} projects.`}
           </p>
-          {statusFilter === 'all' && (
-            <p className="text-sm">Name your first project above to get started.</p>
+          {statusFilter !== 'all' && (
+            <p className="text-sm">Switch to "All" to see every project.</p>
           )}
         </div>
       )}
 
       {categoryNames.map(cat => (
         <div key={cat} className="mb-6">
+          {/* Category header with + icon for standalone task creation */}
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">{cat}</span>
             <div className="flex-1 h-px" style={{ background: 'rgba(12,26,51,0.08)' }} />
+            <button
+              title="Add task to General"
+              onClick={() => setAddingTaskForCategory(cat)}
+              className="w-5 h-5 flex items-center justify-center rounded transition text-text-tertiary hover:text-text-secondary hover:bg-black/5 shrink-0"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="6" y1="1" x2="6" y2="11" />
+                <line x1="1" y1="6" x2="11" y2="6" />
+              </svg>
+            </button>
           </div>
 
-          {/* Standalone tasks */}
-          {(standaloneByCategory[cat] ?? []).map(task => (
-            <motion.div
-              key={task.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-2xl overflow-hidden mb-2 flex items-start gap-3 px-4 py-3 hover:shadow-sm transition-shadow"
-              style={{
-                ...cardStyle,
-                borderLeft: `3px solid ${isOverdue(task.dueDate) ? '#C0392B' : ({ High: '#C0392B', Medium: '#C4A24E', Low: '#2D8F65' }[task.priority] ?? '#8B93A1')}`,
-              }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-text-primary">{task.text}</p>
+          {/* General section: project-less tasks */}
+          {((standaloneByCategory[cat] ?? []).length > 0 || addingTaskForCategory === cat) && (
+            <div className="bg-white rounded-2xl px-4 pb-1 mb-3" style={cardStyle}>
+              <div style={{ paddingTop: '8px', paddingBottom: '4px' }}>
+                <p className="text-[10px] font-medium uppercase tracking-[1.5px]" style={{ color: '#8B93A1' }}>General</p>
+                <div style={{ height: '1px', background: 'rgba(12,26,51,0.06)', marginTop: '3px' }} />
               </div>
-              <button
-                onClick={() => setEditingTask(task)}
-                className="text-xs text-text-tertiary hover:text-text-secondary transition shrink-0"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleComplete(task.id)}
-                className="w-[22px] h-[22px] rounded-full shrink-0"
-                style={{ border: '1.5px solid rgba(12,26,51,0.15)' }}
-                aria-label="Complete"
-              />
-            </motion.div>
-          ))}
 
-          {/* Project cards — 2-col grid on md+ */}
-          {(projectsByCategory[cat] ?? []).length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(projectsByCategory[cat] ?? []).map((project, i) => {
-                const projectTasks = projectTaskMap[project.id] ?? []
-                const hasOverdue = projectTasks.some(t => isOverdue(t.dueDate))
-                return (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    index={i}
-                    tasks={projectTasks}
-                    onComplete={handleComplete}
-                    onDelete={handleDelete}
-                    onOpenEdit={setEditingTask}
-                    onAddTask={handleAdd}
-                    onAddSubtask={onAddSubtask}
-                    defaultExpanded={hasOverdue}
-                    onEditProject={p => { setEditingProject(p); setShowProjectModal(true) }}
-                    onDeleteProject={handleDeleteProject}
-                    onToggleDailyTask={onToggleDailyTask}
+              {/* Inline add form */}
+              {addingTaskForCategory === cat && (
+                <GeneralTaskAddRow
+                  categoryName={cat}
+                  onAdd={async data => { await handleAdd(data); setAddingTaskForCategory(null) }}
+                  onCancel={() => setAddingTaskForCategory(null)}
+                />
+              )}
+
+              {(standaloneByCategory[cat] ?? []).map(task => (
+                <motion.div
+                  key={task.id}
+                  layout
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-3 py-2.5 group"
+                  style={{ borderTop: '1px solid rgba(12,26,51,0.04)' }}
+                >
+                  <div className="w-[3px] self-stretch rounded-full shrink-0" style={{ background: isOverdue(task.dueDate) ? '#C0392B' : ({ High: '#C0392B', Medium: '#C4A24E', Low: '#2D8F65' }[task.priority] ?? '#8B93A1') }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text-primary leading-snug break-words">{task.text}</p>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setEditingTask(task)}
+                      title="Edit task"
+                      className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 1.5l2.5 2.5L4 11.5H1.5V9L9 1.5z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => handleComplete(task.id)}
+                    className="w-[22px] h-[22px] rounded-full shrink-0 mt-0.5"
+                    style={{ border: '1.5px solid rgba(12,26,51,0.15)' }}
+                    aria-label="Complete"
                   />
-                )
-              })}
+                </motion.div>
+              ))}
             </div>
           )}
+
+          {/* Project cards — 2-col grid on md+ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(projectsByCategory[cat] ?? []).map((project, i) => {
+              const projectTasks = projectTaskMap[project.id] ?? []
+              const hasOverdue = projectTasks.some(t => isOverdue(t.dueDate))
+              return (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  index={i}
+                  tasks={projectTasks}
+                  onComplete={handleComplete}
+                  onDelete={handleDelete}
+                  onOpenEdit={setEditingTask}
+                  onAddTask={handleAdd}
+                  onAddSubtask={onAddSubtask}
+                  defaultExpanded={hasOverdue}
+                  onEditProject={p => { setEditingProject(p); setShowProjectModal(true) }}
+                  onDeleteProject={handleDeleteProject}
+                  onUpdateProject={handleQuickUpdateProject}
+                  onToggleDailyTask={onToggleDailyTask}
+                />
+              )
+            })}
+            {/* Outline card — new project in this category */}
+            <button
+              onClick={() => { setNewProjectCategory(cat); setEditingProject(null); setShowProjectModal(true) }}
+              className="rounded-2xl flex flex-col items-center justify-center gap-1.5 py-6 transition-colors hover:bg-black/[0.02]"
+              style={{ border: '1.5px dashed rgba(12,26,51,0.14)', minHeight: '80px', color: '#8B93A1' }}
+            >
+              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="6" y1="1" x2="6" y2="11" />
+                <line x1="1" y1="6" x2="11" y2="6" />
+              </svg>
+              <span className="text-xs font-medium">New project</span>
+            </button>
+          </div>
         </div>
       ))}
 
@@ -540,10 +789,42 @@ export default function ProjectsTab({
         </AnimatePresence>
       </div>
 
+      {/* Manage FU Templates */}
+      <div className="mt-4">
+        <button
+          onClick={() => setManagingFu(o => !o)}
+          className="flex items-center gap-2 text-sm text-text-tertiary hover:text-text-secondary transition"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 4a2 2 0 114 0 2 2 0 01-2 2M4 4v3a3 3 0 003 3h3M10 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          <span>Follow-Up Templates</span>
+          <span className="text-[11px]">{managingFu ? '▾' : '▶'}</span>
+        </button>
+        <AnimatePresence initial={false}>
+          {managingFu && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <ManageFuTemplatesPanel
+                templates={fuTemplates}
+                onAddTemplate={onAddFuTemplate}
+                onDeleteTemplate={onDeleteFuTemplate}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       <TaskEditModal
         task={editingTask}
         categories={categories}
         activeProjects={activeProjects}
+        fuTemplates={fuTemplates}
         onSave={handleSaveEdit}
         onClose={() => setEditingTask(null)}
       />
@@ -553,8 +834,9 @@ export default function ProjectsTab({
           <ProjectModal
             categories={categories}
             project={editingProject}
+            defaultCategoryName={newProjectCategory}
             onSave={editingProject ? handleSaveEditProject : handleAddProject}
-            onClose={() => { setShowProjectModal(false); setEditingProject(null) }}
+            onClose={() => { setShowProjectModal(false); setEditingProject(null); setNewProjectCategory('') }}
           />
         )}
       </AnimatePresence>

@@ -20,8 +20,7 @@ export function useProjects(uid) {
   }, [uid])
 
   const addProject = useCallback(
-    (name, categoryName, status, description, type = 'standard') =>
-      fsAddProject(uid, { name, categoryName, status, description, type }),
+    data => fsAddProject(uid, data),
     [uid]
   )
 

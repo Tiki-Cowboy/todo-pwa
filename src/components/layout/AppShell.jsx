@@ -8,25 +8,40 @@ import ReportingTab from '../reporting/ReportingTab'
 import ConfigureTab from '../configure/ConfigureTab'
 import AssistantPanel from '../assistant/AssistantPanel'
 import ProjectsTab from '../projects/ProjectsTab'
+import EndOfChainModal from '../tasks/EndOfChainModal'
 import { useTasks } from '../../hooks/useTasks'
 import { useCategories } from '../../hooks/useCategories'
 import { useProjects } from '../../hooks/useProjects'
 import { useDailyReset } from '../../hooks/useDailyReset'
+import { useFuTemplates } from '../../hooks/useFuTemplates'
 import { SHOW_CLAUDE_FAB } from '../../config'
 
 export default function AppShell({ user, onSignOut }) {
   const [activeTab, setActiveTab]         = useState('home')
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [chainInfo, setChainInfo]         = useState(null)
 
   const {
     tasks, completedTasks, loading: tasksLoading,
     addTask, completeTask, completeSubtask, deleteTask, updateTask, addSubtask, toggleDailyTask,
+    extendFuChain,
   } = useTasks(user.uid)
 
   const { categories, loading: catsLoading, addCategory, deleteCategory } = useCategories(user.uid)
   const { projects, activeProjects, loading: projectsLoading, addProject, updateProject, archiveProject, deleteProject } = useProjects(user.uid)
+  const { templates: fuTemplates, addTemplate: addFuTemplate, deleteTemplate: deleteFuTemplate } = useFuTemplates(user.uid)
 
   const loading = tasksLoading || catsLoading || projectsLoading
+
+  async function handleComplete(taskId) {
+    const result = await completeTask(taskId)
+    if (result?.chainComplete) setChainInfo(result)
+  }
+
+  async function handleCompleteSubtask(taskId, parentId) {
+    const result = await completeSubtask(taskId, parentId)
+    if (result?.chainComplete) setChainInfo(result)
+  }
 
   const dailyProjectIds = useMemo(
     () => new Set(activeProjects.filter(p => p.type === 'daily').map(p => p.id)),
@@ -42,10 +57,12 @@ export default function AppShell({ user, onSignOut }) {
         return (
           <HomeTab
             tasks={tasks}
+            completedTasks={completedTasks}
             categories={categories}
             activeProjects={activeProjects}
-            onComplete={completeTask}
-            onCompleteSubtask={completeSubtask}
+            fuTemplates={fuTemplates}
+            onComplete={handleComplete}
+            onCompleteSubtask={handleCompleteSubtask}
             onUpdate={updateTask}
             onToggleDailyTask={toggleDailyTask}
           />
@@ -57,9 +74,10 @@ export default function AppShell({ user, onSignOut }) {
             categories={categories}
             projects={projects}
             activeProjects={activeProjects}
+            fuTemplates={fuTemplates}
             onAdd={addTask}
             onAddSubtask={addSubtask}
-            onComplete={(id, parentId) => parentId ? completeSubtask(id, parentId) : completeTask(id)}
+            onComplete={(id, parentId) => parentId ? handleCompleteSubtask(id, parentId) : handleComplete(id)}
             onDelete={deleteTask}
             onUpdate={updateTask}
             onAddProject={addProject}
@@ -68,6 +86,8 @@ export default function AppShell({ user, onSignOut }) {
             onToggleDailyTask={toggleDailyTask}
             onAddCategory={addCategory}
             onDeleteCategory={deleteCategory}
+            onAddFuTemplate={addFuTemplate}
+            onDeleteFuTemplate={deleteFuTemplate}
           />
         )
       case 'reporting':
@@ -123,6 +143,12 @@ export default function AppShell({ user, onSignOut }) {
       <AssistantPanel
         isOpen={assistantOpen}
         onClose={() => setAssistantOpen(false)}
+      />
+
+      <EndOfChainModal
+        chainInfo={chainInfo}
+        onAddAnother={days => extendFuChain(chainInfo, days)}
+        onClose={() => setChainInfo(null)}
       />
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

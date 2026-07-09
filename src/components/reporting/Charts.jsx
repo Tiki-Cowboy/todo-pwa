@@ -31,7 +31,7 @@ const axisProps = {
 
 function EmptyState() {
   return (
-    <div className="flex items-center justify-center h-40 text-text-muted text-sm italic">
+    <div className="flex items-center justify-center h-40 text-text-tertiary text-sm italic">
       No data for this period
     </div>
   )
@@ -39,8 +39,11 @@ function EmptyState() {
 
 function ChartCard({ title, children, wide = false }) {
   return (
-    <div className={`bg-surface rounded-2xl border border-border p-5 ${wide ? 'lg:col-span-2' : ''}`}>
-      <h3 className="font-display text-base font-semibold text-text mb-4">{title}</h3>
+    <div
+      className={`bg-white rounded-2xl p-5 ${wide ? 'lg:col-span-2' : ''}`}
+      style={{ border: '1px solid rgba(12,26,51,0.06)' }}
+    >
+      <h3 className="text-base font-semibold text-text-primary mb-4">{title}</h3>
       {children}
     </div>
   )

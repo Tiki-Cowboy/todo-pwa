@@ -12,22 +12,31 @@ const PRIORITY_TEXT   = { High: '#C0392B', Medium: '#8B7332', Low: '#2D8F65' }
 const PRIORITY_ORDER  = { Critical: 0, High: 1, Medium: 2, Low: 3 }
 const ACCENT_COLORS   = ['#C4A24E', '#C0392B', '#4A6FA5', '#2D8F65', '#9b7fd4', '#e87c4a']
 
+function ChainLinkIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a2.5 2.5 0 003.5.2l1.8-1.8a2.5 2.5 0 00-3.5-3.5L6.7 4" />
+      <path d="M8 6a2.5 2.5 0 00-3.5-.2L2.7 7.6a2.5 2.5 0 003.5 3.5L7.3 10" />
+    </svg>
+  )
+}
+
 function CelebrationBanner({ visible }) {
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 0, scale: 0.88 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.88 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center"
         >
           <div
-            className="rounded-2xl px-6 py-4 text-center shadow-2xl max-w-xs mx-auto"
+            className="rounded-2xl px-6 py-5 text-center shadow-2xl max-w-xs mx-4"
             style={{ background: '#0C1A33', border: '1px solid rgba(196,162,78,0.3)' }}
           >
-            <p className="text-lg mb-1">🌴</p>
+            <p className="text-2xl mb-2">🌴</p>
             <p className="text-sm font-medium text-white leading-snug">
               Congrats! You've completed the sisyphean challenge of accomplishing all of today's tasks.
             </p>
@@ -64,7 +73,12 @@ function TodayTaskRow({ task, projectInfo, onComplete, onCompleteSubtask, onOpen
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-text-primary leading-snug break-words">{task.text}</p>
+          <div className="flex items-center gap-1.5">
+            {task.fuChain?.enabled && (
+              <span title="Follow-up chain" className="text-text-tertiary shrink-0"><ChainLinkIcon /></span>
+            )}
+            <p className="flex-1 text-sm text-text-primary leading-snug break-words">{task.text}</p>
+          </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-text-tertiary">{task.category}</span>
             {projectInfo && (
@@ -81,6 +95,20 @@ function TodayTaskRow({ task, projectInfo, onComplete, onCompleteSubtask, onOpen
               </span>
             )}
           </div>
+          {(task.dealUrl || task.contactUrl) && (
+            <div className="flex flex-wrap gap-2 mt-0.5">
+              {task.dealUrl && (
+                <a href={task.dealUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-medium text-[#4A6FA5] hover:underline">
+                  {task.dealName || 'HubSpot Deal'} ↗
+                </a>
+              )}
+              {task.contactUrl && (
+                <a href={task.contactUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-medium text-[#4A6FA5] hover:underline">
+                  {task.contactName || 'HubSpot Contact'} ↗
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right */}
@@ -114,6 +142,9 @@ function TodayTaskRow({ task, projectInfo, onComplete, onCompleteSubtask, onOpen
           style={{ borderBottom: '1px solid rgba(12,26,51,0.04)' }}
         >
           <div className="w-[2px] self-stretch rounded-full shrink-0" style={{ background: 'rgba(12,26,51,0.1)' }} />
+          {sub.fuChain?.enabled && (
+            <span title="Follow-up chain" className="text-text-tertiary shrink-0"><ChainLinkIcon /></span>
+          )}
           <p className="flex-1 text-xs text-text-secondary leading-snug break-words">{sub.text}</p>
           <button
             onClick={() => onCompleteSubtask?.(sub.id, sub.parentId)}
@@ -160,8 +191,10 @@ function DailyChecklistRow({ task, onToggle }) {
 
 export default function HomeTab({
   tasks,
+  completedTasks = [],
   categories,
   activeProjects = [],
+  fuTemplates = [],
   onComplete,
   onCompleteSubtask,
   onUpdate,
@@ -245,6 +278,31 @@ export default function HomeTab({
     })
   }, [tasks, sort, projectMapById])
 
+  const groupedVisibleTasks = useMemo(() => {
+    const groups = {}
+    visibleTasks.forEach(task => {
+      const cat = task.category || 'Uncategorized'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(task)
+    })
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+  }, [visibleTasks])
+
+  const completedToday = useMemo(() =>
+    completedTasks.filter(t => t.completedAt && isToday(t.completedAt)),
+    [completedTasks]
+  )
+
+  const completedTodayByCategory = useMemo(() => {
+    const groups = {}
+    completedToday.forEach(t => {
+      const cat = t.category || 'Uncategorized'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(t)
+    })
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+  }, [completedToday])
+
   function celebrate() {
     setShowBanner(true)
     confetti({ particleCount: 160, spread: 75, origin: { y: 0.55 }, colors: ['#C4A24E', '#0C1A33', '#2D8F65', '#ffffff'] })
@@ -323,16 +381,26 @@ export default function HomeTab({
             </div>
           </div>
           <div className="bg-white rounded-2xl px-4 pb-1" style={cardStyle}>
-            {visibleTasks.map(task => (
-              <TodayTaskRow
-                key={task.id}
-                task={task}
-                projectInfo={projectMapById.get(task.projectId) ?? null}
-                subtasks={subtaskMap.get(task.id) ?? []}
-                onComplete={handleComplete}
-                onCompleteSubtask={onCompleteSubtask}
-                onOpenEdit={setEditingTask}
-              />
+            {groupedVisibleTasks.map(([categoryName, catTasks], gi) => (
+              <div key={categoryName}>
+                <div className={gi > 0 ? 'mt-2' : ''} style={{ paddingTop: '10px', paddingBottom: '4px' }}>
+                  <p className="text-[11px] font-medium uppercase tracking-[1.5px]" style={{ color: '#8B93A1' }}>
+                    {categoryName}
+                  </p>
+                  <div style={{ height: '1px', background: 'rgba(12,26,51,0.06)', marginTop: '4px' }} />
+                </div>
+                {catTasks.map(task => (
+                  <TodayTaskRow
+                    key={task.id}
+                    task={task}
+                    projectInfo={projectMapById.get(task.projectId) ?? null}
+                    subtasks={subtaskMap.get(task.id) ?? []}
+                    onComplete={handleComplete}
+                    onCompleteSubtask={onCompleteSubtask}
+                    onOpenEdit={setEditingTask}
+                  />
+                ))}
+              </div>
             ))}
           </div>
         </div>
@@ -368,10 +436,44 @@ export default function HomeTab({
         </div>
       )}
 
+      {completedToday.length > 0 && (
+        <div className="mt-6">
+          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px] mb-2">
+            Completed Today
+          </p>
+          <div className="bg-white rounded-2xl px-4 pb-1" style={cardStyle}>
+            {completedTodayByCategory.map(([categoryName, catTasks], gi) => (
+              <div key={categoryName}>
+                <div className={gi > 0 ? 'mt-2' : ''} style={{ paddingTop: '10px', paddingBottom: '4px' }}>
+                  <p className="text-[11px] font-medium uppercase tracking-[1.5px]" style={{ color: '#8B93A1' }}>
+                    {categoryName}
+                  </p>
+                  <div style={{ height: '1px', background: 'rgba(12,26,51,0.06)', marginTop: '4px' }} />
+                </div>
+                {catTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 py-2.5"
+                    style={{ borderBottom: '1px solid rgba(12,26,51,0.05)' }}
+                  >
+                    <div className="w-[3px] self-stretch rounded-full shrink-0" style={{ background: 'rgba(45,143,101,0.4)' }} />
+                    <p className="flex-1 text-sm text-text-tertiary line-through leading-snug break-words">{task.text}</p>
+                    <span className="text-[10px] text-text-tertiary shrink-0 whitespace-nowrap">
+                      {format(task.completedAt, 'h:mm a')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <TaskEditModal
         task={editingTask}
         categories={categories}
         activeProjects={activeProjects}
+        fuTemplates={fuTemplates}
         onSave={handleSaveEdit}
         onClose={() => setEditingTask(null)}
       />
