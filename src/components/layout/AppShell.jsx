@@ -1,30 +1,32 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import NavBar from './NavBar'
 import BottomNav from './BottomNav'
 import UpdateBanner from './UpdateBanner'
 import HomeTab from '../tasks/HomeTab'
 import ReportingTab from '../reporting/ReportingTab'
-import ConfigureTab from '../configure/ConfigureTab'
 import AssistantPanel from '../assistant/AssistantPanel'
 import ProjectsTab from '../projects/ProjectsTab'
+import ProjectDetailView from '../projects/ProjectDetailView'
 import EndOfChainModal from '../tasks/EndOfChainModal'
 import { useTasks } from '../../hooks/useTasks'
 import { useCategories } from '../../hooks/useCategories'
 import { useProjects } from '../../hooks/useProjects'
 import { useDailyReset } from '../../hooks/useDailyReset'
 import { useFuTemplates } from '../../hooks/useFuTemplates'
+import { migrateLegacyProjectTypes } from '../../lib/firestore'
 import { SHOW_CLAUDE_FAB } from '../../config'
 
 export default function AppShell({ user, onSignOut }) {
-  const [activeTab, setActiveTab]         = useState('home')
+  const location = useLocation()
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [chainInfo, setChainInfo]         = useState(null)
 
   const {
     tasks, completedTasks, loading: tasksLoading,
     addTask, completeTask, completeSubtask, deleteTask, updateTask, addSubtask, toggleDailyTask,
-    extendFuChain,
+    completeFrequentTask, extendFuChain,
   } = useTasks(user.uid)
 
   const { categories, loading: catsLoading, addCategory, deleteCategory } = useCategories(user.uid)
@@ -43,88 +45,99 @@ export default function AppShell({ user, onSignOut }) {
     if (result?.chainComplete) setChainInfo(result)
   }
 
-  const dailyProjectIds = useMemo(
-    () => new Set(activeProjects.filter(p => p.type === 'daily').map(p => p.id)),
-    [activeProjects]
-  )
+  // One-time: task type used to live on the project (pre-task-type Daily/Frequent). No-op once migrated.
+  useEffect(() => { migrateLegacyProjectTypes(user.uid) }, [user.uid])
 
-  useDailyReset(user.uid, tasks, dailyProjectIds)
-
-  function renderTab() {
-    if (loading) return <SkeletonLoader />
-    switch (activeTab) {
-      case 'home':
-        return (
-          <HomeTab
-            tasks={tasks}
-            completedTasks={completedTasks}
-            categories={categories}
-            activeProjects={activeProjects}
-            fuTemplates={fuTemplates}
-            onComplete={handleComplete}
-            onCompleteSubtask={handleCompleteSubtask}
-            onUpdate={updateTask}
-            onToggleDailyTask={toggleDailyTask}
-          />
-        )
-      case 'projects':
-        return (
-          <ProjectsTab
-            tasks={tasks}
-            categories={categories}
-            projects={projects}
-            activeProjects={activeProjects}
-            fuTemplates={fuTemplates}
-            onAdd={addTask}
-            onAddSubtask={addSubtask}
-            onComplete={(id, parentId) => parentId ? handleCompleteSubtask(id, parentId) : handleComplete(id)}
-            onDelete={deleteTask}
-            onUpdate={updateTask}
-            onAddProject={addProject}
-            onUpdateProject={updateProject}
-            onDeleteProject={deleteProject}
-            onToggleDailyTask={toggleDailyTask}
-            onAddCategory={addCategory}
-            onDeleteCategory={deleteCategory}
-            onAddFuTemplate={addFuTemplate}
-            onDeleteFuTemplate={deleteFuTemplate}
-          />
-        )
-      case 'reporting':
-        return <ReportingTab completedTasks={completedTasks} categories={categories} projects={projects} />
-      case 'configure':
-        return (
-          <ConfigureTab
-            categories={categories}
-            onAdd={addCategory}
-            onDelete={deleteCategory}
-            projects={projects}
-            onUpdateProject={updateProject}
-            onArchiveProject={archiveProject}
-            onDeleteProject={deleteProject}
-          />
-        )
-      default:
-        return null
-    }
-  }
+  useDailyReset(user.uid, tasks)
 
   return (
     <div className="min-h-screen bg-page-bg flex flex-col">
-      <NavBar user={user} onSignOut={onSignOut} activeTab={activeTab} onTabChange={setActiveTab} />
+      <NavBar user={user} onSignOut={onSignOut} />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 pt-6 pb-[88px] md:pb-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18, ease: 'easeInOut' }}
-          >
-            {renderTab()}
-          </motion.div>
-        </AnimatePresence>
+        {loading ? (
+          <SkeletonLoader />
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, ease: 'easeInOut' }}
+            >
+              <Routes location={location}>
+                <Route path="/" element={<Navigate to="/today" replace />} />
+                <Route
+                  path="/today"
+                  element={
+                    <HomeTab
+                      tasks={tasks}
+                      completedTasks={completedTasks}
+                      categories={categories}
+                      activeProjects={activeProjects}
+                      fuTemplates={fuTemplates}
+                      onComplete={handleComplete}
+                      onCompleteSubtask={handleCompleteSubtask}
+                      onUpdate={updateTask}
+                      onToggleDailyTask={toggleDailyTask}
+                      onCompleteFrequentTask={completeFrequentTask}
+                    />
+                  }
+                />
+                <Route
+                  path="/projects"
+                  element={
+                    <ProjectsTab
+                      tasks={tasks}
+                      categories={categories}
+                      projects={projects}
+                      activeProjects={activeProjects}
+                      fuTemplates={fuTemplates}
+                      onAdd={addTask}
+                      onAddSubtask={addSubtask}
+                      onComplete={(id, parentId) => parentId ? handleCompleteSubtask(id, parentId) : handleComplete(id)}
+                      onDelete={deleteTask}
+                      onUpdate={updateTask}
+                      onAddProject={addProject}
+                      onUpdateProject={updateProject}
+                      onDeleteProject={deleteProject}
+                      onToggleDailyTask={toggleDailyTask}
+                      onCompleteFrequentTask={completeFrequentTask}
+                      onAddCategory={addCategory}
+                      onDeleteCategory={deleteCategory}
+                      onAddFuTemplate={addFuTemplate}
+                      onDeleteFuTemplate={deleteFuTemplate}
+                    />
+                  }
+                />
+                <Route
+                  path="/projects/:projectId"
+                  element={
+                    <ProjectDetailView
+                      tasks={tasks}
+                      completedTasks={completedTasks}
+                      projects={projects}
+                      categories={categories}
+                      activeProjects={activeProjects}
+                      fuTemplates={fuTemplates}
+                      onAdd={addTask}
+                      onAddSubtask={addSubtask}
+                      onComplete={(id, parentId) => parentId ? handleCompleteSubtask(id, parentId) : handleComplete(id)}
+                      onDelete={deleteTask}
+                      onUpdate={updateTask}
+                      onUpdateProject={updateProject}
+                      onToggleDailyTask={toggleDailyTask}
+                      onCompleteFrequentTask={completeFrequentTask}
+                    />
+                  }
+                />
+                <Route path="/reporting" element={<ReportingTab completedTasks={completedTasks} categories={categories} projects={projects} />} />
+                <Route path="*" element={<Navigate to="/today" replace />} />
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </main>
 
       {SHOW_CLAUDE_FAB && (
@@ -151,7 +164,7 @@ export default function AppShell({ user, onSignOut }) {
         onClose={() => setChainInfo(null)}
       />
 
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav />
 
       <UpdateBanner />
     </div>

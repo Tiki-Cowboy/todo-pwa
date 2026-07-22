@@ -1,10 +1,12 @@
+import { NavLink } from 'react-router-dom'
+
 const TABS = [
-  { id: 'home',      label: 'Today' },
-  { id: 'projects',  label: 'Projects' },
-  { id: 'reporting', label: 'Reporting' },
+  { path: '/today',     label: 'Today' },
+  { path: '/projects',  label: 'Projects' },
+  { path: '/reporting', label: 'Reporting' },
 ]
 
-export default function NavBar({ user, onSignOut, activeTab, onTabChange }) {
+export default function NavBar({ user, onSignOut }) {
   return (
     <div className="sticky top-0 z-10">
       <header className="bg-navy-deep" style={{ height: 52 }}>
@@ -16,16 +18,16 @@ export default function NavBar({ user, onSignOut, activeTab, onTabChange }) {
           {/* Desktop tab nav — hidden on mobile */}
           <nav className="hidden md:flex items-center gap-0.5 flex-1">
             {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+              <NavLink
+                key={tab.path}
+                to={tab.path}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium uppercase tracking-[1px] transition"
-                style={activeTab === tab.id
+                style={({ isActive }) => isActive
                   ? { background: 'rgba(196,162,78,0.15)', color: '#C4A24E' }
                   : { color: '#6B7793' }}
               >
                 {tab.label}
-              </button>
+              </NavLink>
             ))}
           </nav>
 

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { isToday, parseISO, format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import TaskEditModal from './TaskEditModal'
@@ -48,6 +49,7 @@ function CelebrationBanner({ visible }) {
 }
 
 function TodayTaskRow({ task, projectInfo, onComplete, onCompleteSubtask, onOpenEdit, subtasks = [] }) {
+  const navigate = useNavigate()
   const [completing, setCompleting] = useState(false)
   const due = task.dueDate ? formatDueDate(task.dueDate) : null
   const overdue = due?.overdue ?? false
@@ -82,12 +84,15 @@ function TodayTaskRow({ task, projectInfo, onComplete, onCompleteSubtask, onOpen
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-text-tertiary">{task.category}</span>
             {projectInfo && (
-              <span
-                className="text-[10px] font-medium px-1.5 py-0.5 rounded-md"
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); navigate(`/projects/${projectInfo.id}`) }}
+                title={`Open ${projectInfo.name}`}
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded-md hover:opacity-75 transition-opacity"
                 style={{ background: projectInfo.color + '22', color: projectInfo.color }}
               >
                 {projectInfo.name}
-              </span>
+              </button>
             )}
             {due && (
               <span className="text-xs font-medium" style={{ color: overdue ? '#C0392B' : '#C4A24E' }}>
@@ -189,6 +194,44 @@ function DailyChecklistRow({ task, onToggle }) {
   )
 }
 
+function FrequentChecklistRow({ task, onComplete }) {
+  const [completing, setCompleting] = useState(false)
+  const due = task.recurrence?.nextDueDate ? formatDueDate(task.recurrence.nextDueDate) : null
+
+  async function handleComplete() {
+    setCompleting(true)
+    await new Promise(r => setTimeout(r, 200))
+    onComplete(task.id)
+  }
+
+  return (
+    <motion.div
+      layout
+      animate={completing ? { opacity: 0, x: 30 } : { opacity: 1, x: 0 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-center gap-3 py-3"
+      style={{ borderBottom: '1px solid rgba(12,26,51,0.05)' }}
+    >
+      <div className="w-[3px] self-stretch rounded-full shrink-0" style={{ background: due?.overdue ? '#C0392B' : 'rgba(155,127,212,0.4)' }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-text-primary leading-snug">{task.text}</p>
+        {due && (
+          <p className="text-xs mt-0.5" style={{ color: due.overdue ? '#C0392B' : '#8B93A1' }}>
+            {due.overdue && '⚠ '}{due.label}
+          </p>
+        )}
+      </div>
+      <button
+        onClick={handleComplete}
+        disabled={completing}
+        className="w-[26px] h-[26px] rounded-full shrink-0 disabled:opacity-40"
+        style={{ background: 'transparent', border: '1.5px solid rgba(12,26,51,0.2)' }}
+        aria-label="Mark done"
+      />
+    </motion.div>
+  )
+}
+
 export default function HomeTab({
   tasks,
   completedTasks = [],
@@ -199,10 +242,12 @@ export default function HomeTab({
   onCompleteSubtask,
   onUpdate,
   onToggleDailyTask,
+  onCompleteFrequentTask,
 }) {
   const toast = useToast()
   const [editingTask, setEditingTask] = useState(null)
   const [sort, setSort] = useState('due')
+  const [groupByProject, setGroupByProject] = useState(false)
   const [showBanner, setShowBanner] = useState(false)
 
   // Tracks which lists have already celebrated today — { dueOverdue: 'yyyy-MM-dd', daily: 'yyyy-MM-dd' }
@@ -211,7 +256,7 @@ export default function HomeTab({
   const todayDate = format(new Date(), 'EEEE, MMMM d')
 
   const projectMapById = useMemo(() =>
-    new Map(activeProjects.map((p, i) => [p.id, { name: p.name, color: ACCENT_COLORS[i % ACCENT_COLORS.length] }])),
+    new Map(activeProjects.map((p, i) => [p.id, { id: p.id, name: p.name, color: ACCENT_COLORS[i % ACCENT_COLORS.length] }])),
     [activeProjects]
   )
 
@@ -224,35 +269,53 @@ export default function HomeTab({
     return map
   }, [tasks])
 
-  // Daily checklist tasks — from daily-type projects
-  const dailyProjectIds = useMemo(() =>
-    new Set(activeProjects.filter(p => p.type === 'daily').map(p => p.id)),
-    [activeProjects]
-  )
-
+  // Daily checklist tasks — driven by each task's own type, grouped by its project (any project can mix task types)
   const groupedDailyTasks = useMemo(() => {
     const projectMap = new Map(activeProjects.map(p => [p.id, p]))
     const groups = new Map()
     tasks
-      .filter(t => !t.parentId && t.projectId && dailyProjectIds.has(t.projectId))
+      .filter(t => !t.parentId && t.type === 'daily')
       .forEach(task => {
-        if (!groups.has(task.projectId)) {
-          groups.set(task.projectId, {
-            projectName: projectMap.get(task.projectId)?.name ?? 'Uncategorized',
+        const key = task.projectId ?? '__general__'
+        if (!groups.has(key)) {
+          groups.set(key, {
+            projectName: task.projectId ? (projectMap.get(task.projectId)?.name ?? 'Uncategorized') : 'General',
             tasks: [],
           })
         }
-        groups.get(task.projectId).tasks.push(task)
+        groups.get(key).tasks.push(task)
       })
     return Array.from(groups.values())
       .map(g => ({ ...g, tasks: g.tasks.sort((a, b) => a.text.localeCompare(b.text)) }))
       .sort((a, b) => a.projectName.localeCompare(b.projectName))
-  }, [tasks, dailyProjectIds, activeProjects])
+  }, [tasks, activeProjects])
+
+  // Frequents checklist — driven by each task's own type, only currently-due tasks
+  const groupedFrequentTasks = useMemo(() => {
+    const projectMap = new Map(activeProjects.map(p => [p.id, p]))
+    const groups = new Map()
+    tasks
+      .filter(t => !t.parentId && t.type === 'frequent' && t.recurrence?.nextDueDate && t.recurrence.nextDueDate <= TODAY)
+      .forEach(task => {
+        const key = task.projectId ?? '__general__'
+        if (!groups.has(key)) {
+          groups.set(key, {
+            projectName: task.projectId ? (projectMap.get(task.projectId)?.name ?? 'Uncategorized') : 'General',
+            tasks: [],
+          })
+        }
+        groups.get(key).tasks.push(task)
+      })
+    return Array.from(groups.values())
+      .map(g => ({ ...g, tasks: g.tasks.sort((a, b) => a.recurrence.nextDueDate.localeCompare(b.recurrence.nextDueDate)) }))
+      .sort((a, b) => a.projectName.localeCompare(b.projectName))
+  }, [tasks, activeProjects])
 
   const visibleTasks = useMemo(() => {
     const eligible = tasks.filter(t =>
       !t.parentId &&
       !t.completedAt &&
+      (t.type ?? 'standard') === 'standard' &&
       t.dueDate &&
       (isOverdue(t.dueDate) || isToday(parseISO(t.dueDate)))
     )
@@ -287,6 +350,30 @@ export default function HomeTab({
     })
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
   }, [visibleTasks])
+
+  // Each category's tasks further split into per-project subgroups (General last)
+  const groupedVisibleTasksByProject = useMemo(() => {
+    return groupedVisibleTasks.map(([categoryName, catTasks]) => {
+      const byProject = new Map()
+      catTasks.forEach(task => {
+        const key = task.projectId ?? '__general__'
+        if (!byProject.has(key)) byProject.set(key, [])
+        byProject.get(key).push(task)
+      })
+      const subgroups = [...byProject.entries()]
+        .map(([key, subTasks]) => ({
+          key,
+          projectName: key === '__general__' ? 'General' : (projectMapById.get(key)?.name ?? 'General'),
+          tasks: subTasks,
+        }))
+        .sort((a, b) => {
+          if (a.key === '__general__') return 1
+          if (b.key === '__general__') return -1
+          return a.projectName.localeCompare(b.projectName)
+        })
+      return [categoryName, subgroups]
+    })
+  }, [groupedVisibleTasks, projectMapById])
 
   const completedToday = useMemo(() =>
     completedTasks.filter(t => t.completedAt && isToday(t.completedAt)),
@@ -361,10 +448,19 @@ export default function HomeTab({
         </div>
       ) : (
         <div>
-          <div className="flex items-center mb-2 gap-2">
+          <div className="flex items-center mb-2 gap-2 flex-wrap">
             <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px] flex-1">
               DUE &amp; OVERDUE
             </p>
+            <button
+              onClick={() => setGroupByProject(g => !g)}
+              className="px-2 py-1 rounded-lg text-[11px] font-medium transition"
+              style={groupByProject
+                ? { background: '#0C1A33', color: '#F5EDD8' }
+                : { background: 'white', color: '#8B93A1', border: '1px solid rgba(12,26,51,0.08)' }}
+            >
+              Group by Project
+            </button>
             <div className="flex gap-0.5 rounded-lg p-0.5 bg-white" style={{ border: '1px solid rgba(12,26,51,0.08)' }}>
               {[['due', 'Due Date'], ['priority', 'Priority'], ['project', 'Project']].map(([val, label]) => (
                 <button
@@ -381,25 +477,48 @@ export default function HomeTab({
             </div>
           </div>
           <div className="bg-white rounded-2xl px-4 pb-1" style={cardStyle}>
-            {groupedVisibleTasks.map(([categoryName, catTasks], gi) => (
+            {(groupByProject ? groupedVisibleTasksByProject : groupedVisibleTasks).map(([categoryName, catTasksOrSubgroups], gi) => (
               <div key={categoryName}>
-                <div className={gi > 0 ? 'mt-2' : ''} style={{ paddingTop: '10px', paddingBottom: '4px' }}>
-                  <p className="text-[11px] font-medium uppercase tracking-[1.5px]" style={{ color: '#8B93A1' }}>
+                <div className={gi > 0 ? 'mt-3' : ''} style={{ paddingTop: '10px', paddingBottom: '6px' }}>
+                  <p className="text-[12px] font-semibold uppercase tracking-[1.5px] text-text-primary">
                     {categoryName}
                   </p>
-                  <div style={{ height: '1px', background: 'rgba(12,26,51,0.06)', marginTop: '4px' }} />
+                  <div style={{ height: '2px', background: 'rgba(196,162,78,0.4)', marginTop: '4px', width: '28px', borderRadius: '2px' }} />
                 </div>
-                {catTasks.map(task => (
-                  <TodayTaskRow
-                    key={task.id}
-                    task={task}
-                    projectInfo={projectMapById.get(task.projectId) ?? null}
-                    subtasks={subtaskMap.get(task.id) ?? []}
-                    onComplete={handleComplete}
-                    onCompleteSubtask={onCompleteSubtask}
-                    onOpenEdit={setEditingTask}
-                  />
-                ))}
+                {groupByProject ? (
+                  catTasksOrSubgroups.map((sub, si) => (
+                    <div key={sub.key}>
+                      <div className={si > 0 ? 'mt-1.5' : ''} style={{ paddingTop: '4px', paddingBottom: '2px' }}>
+                        <p className="text-[10px] font-medium uppercase tracking-[1px] pl-2" style={{ color: '#8B93A1' }}>
+                          {sub.projectName}
+                        </p>
+                      </div>
+                      {sub.tasks.map(task => (
+                        <TodayTaskRow
+                          key={task.id}
+                          task={task}
+                          projectInfo={projectMapById.get(task.projectId) ?? null}
+                          subtasks={subtaskMap.get(task.id) ?? []}
+                          onComplete={handleComplete}
+                          onCompleteSubtask={onCompleteSubtask}
+                          onOpenEdit={setEditingTask}
+                        />
+                      ))}
+                    </div>
+                  ))
+                ) : (
+                  catTasksOrSubgroups.map(task => (
+                    <TodayTaskRow
+                      key={task.id}
+                      task={task}
+                      projectInfo={projectMapById.get(task.projectId) ?? null}
+                      subtasks={subtaskMap.get(task.id) ?? []}
+                      onComplete={handleComplete}
+                      onCompleteSubtask={onCompleteSubtask}
+                      onOpenEdit={setEditingTask}
+                    />
+                  ))
+                )}
               </div>
             ))}
           </div>
@@ -428,6 +547,36 @@ export default function HomeTab({
                     key={task.id}
                     task={task}
                     onToggle={onToggleDailyTask}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {groupedFrequentTasks.length > 0 && (
+        <div className="mt-6">
+          <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px] mb-2">
+            Frequents
+          </p>
+          <div className="bg-white rounded-2xl px-4 pb-1" style={cardStyle}>
+            {groupedFrequentTasks.map((group, gi) => (
+              <div key={group.projectName}>
+                <div className={gi > 0 ? 'mt-2' : ''} style={{ paddingTop: '10px', paddingBottom: '4px' }}>
+                  <p
+                    className="text-[11px] font-medium uppercase tracking-[1.5px]"
+                    style={{ color: '#8B93A1' }}
+                  >
+                    {group.projectName}
+                  </p>
+                  <div style={{ height: '1px', background: 'rgba(12,26,51,0.06)', marginTop: '4px' }} />
+                </div>
+                {group.tasks.map(task => (
+                  <FrequentChecklistRow
+                    key={task.id}
+                    task={task}
+                    onComplete={onCompleteFrequentTask}
                   />
                 ))}
               </div>

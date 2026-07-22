@@ -1,9 +1,13 @@
 import { useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDueDate, isOverdue } from '../../lib/dateUtils'
+import { describeRecurrence, initialDueDate } from '../../lib/recurrence'
+import RecurrencePicker from '../tasks/RecurrencePicker'
+import TaskTypeToggle from '../tasks/TaskTypeToggle'
 
-const ACCENT_COLORS = ['#C4A24E', '#C0392B', '#4A6FA5', '#2D8F65', '#9b7fd4', '#e87c4a']
+export const ACCENT_COLORS = ['#C4A24E', '#C0392B', '#4A6FA5', '#2D8F65', '#9b7fd4', '#e87c4a']
 const PRIORITY_BAR  = { High: '#C0392B', Medium: '#C4A24E', Low: '#2D8F65' }
 const PRIORITY_BG   = { High: 'rgba(192,57,43,0.06)',  Medium: 'rgba(196,162,78,0.08)', Low: 'rgba(45,143,101,0.08)' }
 const PRIORITY_TEXT = { High: '#C0392B', Medium: '#8B7332', Low: '#2D8F65' }
@@ -22,7 +26,7 @@ const STATUS_OPTIONS_LIST = [
   { value: 'completed', label: 'Completed' },
 ]
 
-function StatusPill({ status, onStatusChange }) {
+export function StatusPill({ status, onStatusChange }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos]   = useState({ top: 0, left: 0 })
   const btnRef = useRef(null)
@@ -137,6 +141,17 @@ function ChainLinkIcon() {
   )
 }
 
+function OpenIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 1.5H1.5V4.5" />
+      <path d="M7.5 10.5H10.5V7.5" />
+      <path d="M10.5 1.5L6.5 5.5" />
+      <path d="M1.5 10.5L5.5 6.5" />
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -149,7 +164,7 @@ function TrashIcon() {
 
 const TODAY = new Date().toISOString().split('T')[0]
 
-function HubSpotLinks({ dealName, dealUrl, contactName, contactUrl }) {
+export function HubSpotLinks({ dealName, dealUrl, contactName, contactUrl }) {
   const hasDeal    = !!dealUrl
   const hasContact = !!contactUrl
   if (!hasDeal && !hasContact) return null
@@ -179,7 +194,7 @@ function HubSpotLinks({ dealName, dealUrl, contactName, contactUrl }) {
 
 // ── Daily task row ─────────────────────────────────────────────────────────────
 
-function DailyTaskRow({ task, onToggle, onOpenEdit, onDelete, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
+export function DailyTaskRow({ task, onToggle, onOpenEdit, onDelete, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const doneToday = task.lastCompletedDate === TODAY
 
@@ -258,9 +273,81 @@ function DailyTaskRow({ task, onToggle, onOpenEdit, onDelete, onAddSubtask, hasS
   )
 }
 
+// ── Frequent task row (weekly / monthly / interval recurrence) ─────────────────
+
+export function FrequentTaskRow({ task, onComplete, onOpenEdit, onDelete, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const nextDue = task.recurrence?.nextDueDate ?? null
+  const due = nextDue ? formatDueDate(nextDue) : null
+
+  function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 3000) }
+    else onDelete(task.id)
+  }
+
+  return (
+    <div className="flex items-center gap-3 py-2.5 group" style={{ borderTop: '1px solid rgba(12,26,51,0.04)' }}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="flex-1 text-sm text-text-primary leading-snug">{task.text}</p>
+          {hasSubtasks && (
+            <button
+              onClick={onToggleSubtasks}
+              title={subtasksCollapsed ? 'Show sub-tasks' : 'Hide sub-tasks'}
+              className="text-[10px] text-text-tertiary hover:text-text-secondary shrink-0 transition leading-none"
+            >
+              {subtasksCollapsed ? '▶' : '▾'}
+            </button>
+          )}
+        </div>
+        <p className="text-xs mt-0.5" style={{ color: due?.overdue ? '#C0392B' : '#8B93A1' }}>
+          {due?.overdue && '⚠ '}{describeRecurrence(task.recurrence)}{due ? ` · ${due.label}` : ''}
+        </p>
+      </div>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button
+          onClick={() => onOpenEdit(task)}
+          title="Edit task"
+          aria-label="Edit task"
+          className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+        >
+          <PencilIcon />
+        </button>
+        {onAddSubtask && (
+          <button
+            onClick={onAddSubtask}
+            title="Add sub-task"
+            aria-label="Add sub-task"
+            className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+          >
+            <PlusIcon />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={handleDelete}
+            title={confirmDelete ? 'Click again to confirm' : 'Delete task'}
+            aria-label="Delete task"
+            className="w-6 h-6 flex items-center justify-center rounded-md transition"
+            style={{ color: confirmDelete ? '#C0392B' : 'rgba(192,57,43,0.45)' }}
+          >
+            <XIcon />
+          </button>
+        )}
+      </div>
+      <button
+        onClick={() => onComplete(task.id)}
+        className="w-[22px] h-[22px] rounded-full shrink-0"
+        style={{ border: '1.5px solid rgba(12,26,51,0.2)' }}
+        aria-label="Mark done"
+      />
+    </div>
+  )
+}
+
 // ── Standard task row ──────────────────────────────────────────────────────────
 
-function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
+export function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubtasks, subtasksCollapsed, onToggleSubtasks }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [completing, setCompleting]       = useState(false)
   const due     = task.dueDate ? formatDueDate(task.dueDate) : null
@@ -358,7 +445,7 @@ function TaskRow({ task, onComplete, onDelete, onOpenEdit, onAddSubtask, hasSubt
 
 // ── Subtask row ────────────────────────────────────────────────────────────────
 
-function SubtaskRow({ task, onComplete, onDelete, onOpenEdit }) {
+export function SubtaskRow({ task, onComplete, onDelete, onOpenEdit }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [completing, setCompleting]       = useState(false)
 
@@ -418,7 +505,7 @@ function SubtaskRow({ task, onComplete, onDelete, onOpenEdit }) {
 
 // ── Subtask add form ───────────────────────────────────────────────────────────
 
-function SubtaskAddRow({ parentId, category, onAdd, onCancel }) {
+export function SubtaskAddRow({ parentId, category, onAdd, onCancel }) {
   const [text, setText]         = useState('')
   const [priority, setPriority] = useState('Medium')
   const [saving, setSaving]     = useState(false)
@@ -488,15 +575,18 @@ export default function ProjectCard({
   onDeleteProject,
   onUpdateProject,
   onToggleDailyTask,
+  onCompleteFrequentTask,
 }) {
-  const isDaily = project.type === 'daily'
+  const navigate = useNavigate()
   const [expanded, setExpanded]                   = useState(defaultExpanded ?? false)
   const [addingTask, setAddingTask]               = useState(false)
   const [addingSubtaskFor, setAddingSubtaskFor]   = useState(null)
   const [collapsedSubtasks, setCollapsedSubtasks] = useState(new Set())
   const [newTaskText, setNewTaskText]             = useState('')
+  const [newTaskType, setNewTaskType]             = useState('standard')
   const [newTaskPriority, setNewTaskPriority]     = useState('Medium')
   const [newTaskDue, setNewTaskDue]               = useState('')
+  const [newTaskRecurrence, setNewTaskRecurrence] = useState({ type: 'weekly', daysOfWeek: [], dayOfMonth: 1, intervalDays: 7 })
   const [confirmDelete, setConfirmDelete]         = useState(false)
 
   const topLevelTasks = tasks.filter(t => !t.parentId)
@@ -522,16 +612,25 @@ export default function ProjectCard({
     e.preventDefault()
     const trimmed = newTaskText.trim()
     if (!trimmed) return
-    await onAddTask({
+    const base = {
       text: trimmed,
       priority: newTaskPriority,
       category: project.categoryName,
       projectId: project.id,
-      dueDate: newTaskDue || null,
-    })
+      type: newTaskType,
+    }
+    if (newTaskType === 'frequent') {
+      await onAddTask({ ...base, recurrence: { ...newTaskRecurrence, nextDueDate: initialDueDate(newTaskRecurrence, TODAY) } })
+    } else if (newTaskType === 'daily') {
+      await onAddTask(base)
+    } else {
+      await onAddTask({ ...base, dueDate: newTaskDue || null })
+    }
     setNewTaskText('')
+    setNewTaskType('standard')
     setNewTaskPriority('Medium')
     setNewTaskDue('')
+    setNewTaskRecurrence({ type: 'weekly', daysOfWeek: [], dayOfMonth: 1, intervalDays: 7 })
     setAddingTask(false)
   }
 
@@ -543,8 +642,10 @@ export default function ProjectCard({
   function cancelAddTask() {
     setAddingTask(false)
     setNewTaskText('')
+    setNewTaskType('standard')
     setNewTaskPriority('Medium')
     setNewTaskDue('')
+    setNewTaskRecurrence({ type: 'weekly', daysOfWeek: [], dayOfMonth: 1, intervalDays: 7 })
   }
 
   return (
@@ -609,15 +710,17 @@ export default function ProjectCard({
                   status={project.status}
                   onStatusChange={onUpdateProject ? newStatus => onUpdateProject(project.id, { status: newStatus }) : undefined}
                 />
-                {isDaily && (
-                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg" style={{ background: 'rgba(74,111,165,0.08)', color: '#4A6FA5' }}>
-                    ↻ Daily
-                  </span>
-                )}
               </div>
 
               {/* Project-level actions */}
               <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                <button
+                  title="Open project page"
+                  onClick={() => navigate(`/projects/${project.id}`)}
+                  className="w-6 h-6 flex items-center justify-center rounded-md transition text-text-tertiary hover:text-text-secondary hover:bg-black/5"
+                >
+                  <OpenIcon />
+                </button>
                 {onAddTask && (
                   <button
                     title="Add task"
@@ -677,10 +780,21 @@ export default function ProjectCard({
                     const collapsed = collapsedSubtasks.has(task.id)
                     return (
                       <div key={task.id}>
-                        {isDaily ? (
+                        {task.type === 'daily' ? (
                           <DailyTaskRow
                             task={task}
                             onToggle={onToggleDailyTask}
+                            onOpenEdit={onOpenEdit}
+                            onDelete={onDelete}
+                            onAddSubtask={onAddSubtask ? () => setAddingSubtaskFor(task.id) : undefined}
+                            hasSubtasks={subs.length > 0}
+                            subtasksCollapsed={collapsed}
+                            onToggleSubtasks={() => toggleSubtasks(task.id)}
+                          />
+                        ) : task.type === 'frequent' ? (
+                          <FrequentTaskRow
+                            task={task}
+                            onComplete={onCompleteFrequentTask}
                             onOpenEdit={onOpenEdit}
                             onDelete={onDelete}
                             onAddSubtask={onAddSubtask ? () => setAddingSubtaskFor(task.id) : undefined}
@@ -747,13 +861,15 @@ export default function ProjectCard({
                   >
                     {['High', 'Medium', 'Low'].map(p => <option key={p} value={p}>{p} Priority</option>)}
                   </select>
-                  <input
-                    type="date"
-                    value={newTaskDue}
-                    onChange={e => setNewTaskDue(e.target.value)}
-                    className="text-xs bg-page-bg border rounded-lg px-2 py-1.5 text-text-primary focus:outline-none focus:ring-2 focus:ring-gold"
-                    style={{ borderColor: 'rgba(12,26,51,0.12)', colorScheme: 'light' }}
-                  />
+                  {newTaskType === 'standard' && (
+                    <input
+                      type="date"
+                      value={newTaskDue}
+                      onChange={e => setNewTaskDue(e.target.value)}
+                      className="text-xs bg-page-bg border rounded-lg px-2 py-1.5 text-text-primary focus:outline-none focus:ring-2 focus:ring-gold"
+                      style={{ borderColor: 'rgba(12,26,51,0.12)', colorScheme: 'light' }}
+                    />
+                  )}
                   <button
                     type="submit"
                     className="text-xs font-medium text-white px-3 py-1.5 rounded-lg"
@@ -769,6 +885,10 @@ export default function ProjectCard({
                     ✕
                   </button>
                 </div>
+                <TaskTypeToggle value={newTaskType} onChange={setNewTaskType} />
+                {newTaskType === 'frequent' && (
+                  <RecurrencePicker value={newTaskRecurrence} onChange={setNewTaskRecurrence} />
+                )}
               </form>
             </div>
           )}

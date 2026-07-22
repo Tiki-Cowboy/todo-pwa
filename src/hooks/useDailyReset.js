@@ -6,16 +6,16 @@ function localDateStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function useDailyReset(uid, tasks, dailyProjectIds) {
+export function useDailyReset(uid, tasks) {
   // Always-fresh ref — avoids stale closures in the midnight timeout callback
-  const stateRef = useRef({ uid, tasks, dailyProjectIds })
-  stateRef.current = { uid, tasks, dailyProjectIds }
+  const stateRef = useRef({ uid, tasks })
+  stateRef.current = { uid, tasks }
 
   // Prevents re-checking Firestore multiple times in the same session day
   const checkedDate = useRef(null)
 
   async function runReset() {
-    const { uid, tasks, dailyProjectIds } = stateRef.current
+    const { uid, tasks } = stateRef.current
     if (!uid) return
 
     const today = localDateStr()
@@ -26,7 +26,7 @@ export function useDailyReset(uid, tasks, dailyProjectIds) {
     if (lastReset === today) return
 
     const taskIds = tasks
-      .filter(t => !t.parentId && t.projectId && dailyProjectIds.has(t.projectId))
+      .filter(t => !t.parentId && t.type === 'daily')
       .map(t => t.id)
 
     await resetDailyTasks(uid, taskIds)

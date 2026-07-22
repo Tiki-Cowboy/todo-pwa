@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { motion, AnimatePresence } from 'framer-motion'
+import RecurrencePicker from './RecurrencePicker'
+import TaskTypeToggle from './TaskTypeToggle'
+import { initialDueDate } from '../../lib/recurrence'
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const PRIORITIES = ['High', 'Medium', 'Low']
 
@@ -32,6 +40,12 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
   const [addingStep, setAddingStep] = useState(false)
   const [newStepDays, setNewStepDays] = useState('')
 
+  const [recurrence, setRecurrence] = useState({ type: 'weekly', daysOfWeek: [], dayOfMonth: 1, intervalDays: 7 })
+  const [taskType, setTaskType] = useState('standard')
+
+  const isFrequent = taskType === 'frequent'
+  const isDaily = taskType === 'daily'
+
   useEffect(() => {
     if (task) {
       setText(task.text)
@@ -49,6 +63,8 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
       setFuTemplateId(task.fuChain?.templateId ?? null)
       setAddingStep(false)
       setNewStepDays('')
+      setRecurrence(task.recurrence ?? { type: 'weekly', daysOfWeek: [], dayOfMonth: 1, intervalDays: 7 })
+      setTaskType(task.type ?? 'standard')
     }
   }, [task])
 
@@ -74,6 +90,17 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
     setFuTemplateId(templateId)
   }
 
+  function recurrenceUnchanged(a, b) {
+    if (!a || !b) return false
+    return a.type === b.type &&
+      JSON.stringify(a.daysOfWeek ?? []) === JSON.stringify(b.daysOfWeek ?? []) &&
+      a.intervalDays === b.intervalDays &&
+      a.monthlyMode === b.monthlyMode &&
+      JSON.stringify(a.daysOfMonth ?? (a.dayOfMonth ? [a.dayOfMonth] : [])) === JSON.stringify(b.daysOfMonth ?? (b.dayOfMonth ? [b.dayOfMonth] : [])) &&
+      a.weekdayOrdinal === b.weekdayOrdinal &&
+      a.weekday === b.weekday
+  }
+
   async function handleSave(e) {
     e.preventDefault()
     const trimmed = text.trim()
@@ -88,8 +115,13 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
       text:        trimmed,
       priority,
       category,
-      dueDate:     dueDate || null,
+      type:        taskType,
+      dueDate:     taskType === 'standard' ? (dueDate || null) : null,
       projectId:   projectId || null,
+      recurrence: isFrequent ? {
+        ...recurrence,
+        nextDueDate: recurrenceUnchanged(recurrence, task.recurrence) ? task.recurrence.nextDueDate : initialDueDate(recurrence, todayStr()),
+      } : null,
       dealName:    dealName.trim() || null,
       dealUrl:     dealUrl.trim() || null,
       contactName: contactName.trim() || null,
@@ -192,19 +224,36 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
                   )}
 
                   <div>
-                    <label className="block text-xs font-medium text-text-secondary mb-1">
-                      Due Date <span className="text-text-tertiary font-normal">(optional)</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className={inputClass}
-                      style={{ ...borderStyle, colorScheme: 'light' }}
-                    />
+                    <label className="block text-xs font-medium text-text-secondary mb-2">Type</label>
+                    <TaskTypeToggle value={taskType} onChange={setTaskType} />
                   </div>
 
-                  {/* Follow-up reminder chain */}
+                  {isFrequent ? (
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(12,26,51,0.025)', border: '1px solid rgba(12,26,51,0.07)' }}>
+                      <label className="block text-xs font-medium text-text-secondary mb-2">Recurrence</label>
+                      <RecurrencePicker value={recurrence} onChange={setRecurrence} />
+                    </div>
+                  ) : isDaily ? (
+                    <p className="text-[11px] text-text-tertiary">
+                      Resets each day — check it off and it'll be back tomorrow.
+                    </p>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">
+                        Due Date <span className="text-text-tertiary font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={e => setDueDate(e.target.value)}
+                        className={inputClass}
+                        style={{ ...borderStyle, colorScheme: 'light' }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Follow-up reminder chain — standard tasks only */}
+                  {taskType === 'standard' && (
                   <div className="rounded-xl p-3" style={{ background: 'rgba(12,26,51,0.025)', border: '1px solid rgba(12,26,51,0.07)' }}>
                     <label className="flex items-center justify-between">
                       <span className="text-xs font-medium text-text-secondary">Follow-up reminder</span>
@@ -292,6 +341,7 @@ export default function TaskEditModal({ task, categories, activeProjects = [], f
                       </div>
                     )}
                   </div>
+                  )}
 
                   {/* HubSpot links */}
                   <div className="rounded-xl p-3 space-y-2" style={{ background: 'rgba(12,26,51,0.025)', border: '1px solid rgba(12,26,51,0.07)' }}>

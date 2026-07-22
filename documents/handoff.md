@@ -1,164 +1,143 @@
-# HANDOFF — Tiki To-Dos Feature Implementation
-## Instructions for Claude Code
-Implement the two features below sequentially. Complete Phase 1 fully before starting Phase 2. Each phase should leave the app in a shippable state. Check in after each phase.
+# HANDOFF — Tiki Cowboy To-Dos Backlog Additions
+
+> For Claude Code: merge these into the master backlog. Where an item overlaps with an existing entry (noted below), merge/replace rather than duplicate.
 
 ---
 
-# Feature 1: Project Status Note
+## FEAT-A · Project Pill Navigation (Today → Project Tab)
 
-## Overview
-Add a short free-text `statusNote` field to each project. The note (2–5 sentences) is displayed on the collapsed project card in the Projects tab, giving a quick at-a-glance summary of where the project stands. Updated in-place — no history, no versioning.
+**Overlaps with:** existing "Navigation feature: linking project pills in Today view to their corresponding project tab."
 
-## Data Model
-- **Firestore**: Add optional `statusNote: string` field to the `projects` collection documents. No migration needed; absence of the field = no note set.
+**Priority:** Medium
 
-## UI — Projects Tab (Collapsed Card)
-- Display `statusNote` beneath the project title and progress bar on the **collapsed** card.
-- Truncate to **2 lines max** with CSS `line-clamp-2`; full text visible when card is expanded.
-- Style: muted text (`text-sm`, reduced opacity or a lighter navy/gray tone), not bold. Should feel secondary to the project title.
-- If `statusNote` is empty or unset, render nothing (no placeholder label, no empty space).
+**Description:** In Today view, clicking a task's project pill navigates to that project in the Projects tab.
 
-## UI — Edit Flow
-- Add a `<textarea>` for Status Note in the existing project edit modal/drawer.
-- Label: "Status Note"
-- Placeholder: "Where does this project stand?"
-- Max character count: 500 (soft limit with counter shown, not enforced as a hard block)
-- No rich text — plain text only.
-- Saves on modal confirm, same as other project fields.
+**Acceptance Criteria:**
+- Clicking/tapping a project pill navigates to the Projects tab, with the corresponding project scrolled into view / expanded (or, once FEAT-B ships, opens directly into that project's dedicated view)
+- No navigation for tasks with no project (General/null projectId) — pill either doesn't render or is non-interactive
 
-## Acceptance Criteria
-- [ ] `statusNote` persists to Firestore on save and loads correctly on refresh.
-- [ ] Collapsed card shows note truncated to 2 lines; expanded card shows full note.
-- [ ] Empty/unset note renders no visible element on the card.
-- [ ] Editing and clearing the note (empty string) removes it from the card.
-- [ ] Character counter visible in edit textarea.
-
-## Complexity Estimate
-Low — ~2–3 hours. No new data structures, no logic beyond CRUD.
-
-## Dependencies
-None.
+**Dependencies:** Soft dependency on FEAT-B — if that ships first, route directly into the dedicated view instead.
 
 ---
 
-# Feature 2: Follow-Up (FU) Reminder Chains
+## FEAT-B · Dedicated Individual Project View
 
-## Overview
-Tasks can optionally be configured as **Follow-Up reminder chains** — when completed, they automatically spawn a successor task at a defined interval. Chains are finite (a defined sequence of steps), completion-triggered, and can use reusable templates or one-off sequences. When the final step completes, the user is prompted to extend or close out the chain.
+**Overlaps with:** existing "Individual Project view" — this entry supersedes it.
 
-## Terminology
-- **FU Task**: A task that is part of a follow-up chain.
-- **Sequence**: An ordered list of intervals (in days) defining the gaps between each step. e.g. `[7, 4, 10]` = first FU due 7 days after creation, next due 4 days after that one is completed, etc.
-- **Step Index**: Which step in the sequence the current task represents (0-indexed).
-- **Template**: A saved, reusable sequence stored in Configure tab.
+**Priority:** Medium | **Complexity:** L
 
-## Data Model
+**Description:** Replace the single all-projects card view with a dedicated per-project screen, mirroring Bearing's sub-page architecture. Clicking a project navigates to a dedicated view with a back arrow (top left) to return.
 
-### Task document additions (Firestore `tasks` collection)
-```
-fuChain: {
-  enabled: boolean,                  // true if this task is part of a FU chain
-  baseTitle: string,                 // original task name, stripped of any "FU: " prefix
-  sequence: number[],                // array of day intervals, e.g. [7, 4, 10]
-  stepIndex: number,                 // current step (0 = original task, 1 = first FU, etc.)
-  templateId: string | null          // ref to FU template if one was used, else null
-}
-```
+**Acceptance Criteria:**
+- Dedicated per-project view, deep-linkable
+- Back arrow (top left) returns to the main Projects tab
+- Header shows: project title, bio/description, status, category, % completed
+- Open tasks listed below header
+- Below that, a "Completed" section specific to this project, broken down by day — mirroring the existing Reporting tab pattern
 
-### New Firestore collection: `fuTemplates`
-```
-{
-  id: string,
-  name: string,           // e.g. "Weekly then taper"
-  sequence: number[],     // e.g. [7, 4, 10]
-  createdAt: timestamp
-}
-```
+**Notes:** Reuse Reporting tab's day-grouping logic rather than building new grouping logic.
 
-## Task Naming Convention
-- Step 0 (original): user-defined name as-is.
-- Step 1+: `"FU: [baseTitle]"` — always normalized, never stacked (strip any existing "FU: " prefix before prepending).
+---
 
-## Spawning Logic (on task completion)
-When a FU-enabled task is marked complete:
-1. Check `stepIndex` against `sequence.length - 1`.
-2. **If not the final step**: silently create a new task with:
-   - `title`: `"FU: [baseTitle]"`
-   - `dueDate`: today + `sequence[stepIndex + 1]` days
-   - `projectId`: inherited from parent task
-   - `fuChain.enabled`: true
-   - `fuChain.baseTitle`: same as parent
-   - `fuChain.sequence`: same as parent
-   - `fuChain.stepIndex`: `stepIndex + 1`
-   - `fuChain.templateId`: same as parent
-3. **If it is the final step**: show the **End-of-Chain modal** (see below).
+## FEAT-C · Recurring Tasks ("Frequents")
 
-Spawning should happen at the moment of completion (optimistic, client-side creation with Firestore write). No Cloud Function required for MVP.
+**Overlaps with:** existing "Recurring tasks feature" — this entry supersedes it with a revised design.
 
-## End-of-Chain Modal
-Triggered when the last step in a sequence is completed.
+**Priority:** Medium | **Complexity:** L
 
-Content:
-- Title: "Follow-up chain complete"
-- Body: "You've reached the end of this follow-up sequence for **[baseTitle]**. What would you like to do?"
-- Buttons:
-  - **"Add another follow-up"** → opens a small input to enter a new interval in days, then spawns one more task at that gap and closes the modal. The new task's `sequence` is extended by that value.
-  - **"Close out"** → dismisses modal, chain ends. No new task created.
+**Description:** Support non-daily recurring tasks (weekly, monthly, custom interval — e.g. Friday weigh-in, weekend plant watering, monthly stove-grate cleaning). These live in a dedicated "Frequents" project, structurally parallel to Dailies, rather than inside their originating project. Each task carries its own frequency. Rather than spawning a new linked task (FU chain model), a Frequent task simply toggles visibility: it reappears in Today view when due and hides again once completed until the next cycle.
 
-## UI — Task Creation / Edit
+**Acceptance Criteria:**
+- New system grouping "Frequents" (parallel to Dailies, not a user-managed category)
+- Each task has a `frequency`: weekly (day(s) of week), monthly (day of month), or custom interval (every N days from last completion)
+- Dedicated "Frequents" section in Today view, populated only with currently-due tasks; not-yet-due tasks are fully hidden
+- On completion, task hides and its next due date is calculated per its frequency
+- **Missed-task handling:** a due-but-incomplete Frequent task stays visible (as overdue) indefinitely — no grace period, no silent disappearance. It only leaves Today view once marked complete.
+- Recurrence config is editable after creation
 
-### Toggle
-- Add a "Follow-up reminder" toggle in the task create/edit form, off by default.
-- When toggled on, reveal the sequence builder UI below.
+**Data Model Notes:**
+- Tasks need a `recurrence` field, e.g. `{ type: "fixed" | "interval", dayOfWeek/dayOfMonth, intervalDays, lastCompletedDate, nextDueDate }`
+- Reuse/extend the existing Daily Tasks reset-check logic (client-side, checked on Today view load) rather than building a new evaluation engine
+- Diverges from the earlier FU-chain-based approach — Frequents should NOT spawn new task documents per cycle; same document, toggled visibility/due state
 
-### Sequence Builder
-- Display the sequence as a series of pill/chip inputs: each chip shows "+X days".
-- User can add steps with an "+ Add step" button (opens a small day-count input).
-- User can remove individual steps via an ✕ on each chip.
-- Below the chips: a "Use a template" dropdown that populates chips from a saved template (overrides current chips; confirm if chips already exist).
-- Minimum 1 step required if FU is enabled.
+**Notes:** This is a pivot from earlier recurring-tasks discussions (recurring tasks living inside their parent project, reusing FU chain spawn logic). The Frequents model above is now authoritative.
 
-### Visual example of sequence builder (compact):
-```
-[+7 days ✕]  [+4 days ✕]  [+10 days ✕]   + Add step
-[ Use a template ▾ ]
-```
+---
 
-## UI — Task Card (Projects & Today tabs)
-- FU tasks display a small chain-link icon (or similar) next to the title to indicate they're part of a chain.
-- No other visual difference needed for MVP.
+## FEAT-D · Achievements & Badges — Additional Badge Ideas
 
-## Configure Tab — FU Templates
-- Add a "Follow-Up Templates" section to the Configure tab.
-- List existing templates with name + sequence summary (e.g. "Weekly then taper — 7, 4, 10 days").
-- Add / delete templates. No edit — delete and recreate.
-- Template name is required; sequence must have at least 1 step.
+**Overlaps with:** existing FEAT-020 (Achievements & Badges System) — append to the existing badge catalog rather than treat as a new feature.
 
-## Acceptance Criteria
-- [ ] FU toggle appears in task create and edit forms, off by default.
-- [ ] Sequence builder allows adding/removing day-interval steps.
-- [ ] "Use a template" dropdown populates sequence from saved templates.
-- [ ] On completion of a non-final FU task, a successor task is created in Firestore with correct title, due date, projectId, and chain metadata.
-- [ ] Successor task name is always "FU: [baseTitle]" — never stacked.
-- [ ] Successor task inherits parent's projectId.
-- [ ] End-of-Chain modal appears on completion of the final step.
-- [ ] "Add another follow-up" in modal creates one more task at the entered interval.
-- [ ] "Close out" dismisses modal cleanly with no new task.
-- [ ] FU Templates can be created and deleted in Configure tab.
-- [ ] Chain-link icon visible on FU task cards.
-- [ ] All FU data persists correctly to Firestore and survives page refresh.
+**Priority:** Medium
 
-## Complexity Estimate
-Medium-High — ~1–2 days. Primary complexity is the sequence builder UI and the spawning logic edge cases (final step, normalization, modal flow).
+**New Badge Categories:**
 
-## Dependencies
-- Feature 1 (Project Status Note) should be complete first, but Feature 2 has no hard dependency on it.
-- No dependency on recurring tasks feature.
+| Category | Concept | Notes |
+|---|---|---|
+| Record-breaking | Most tasks completed in a 24-hour period | Auto-adjusts each time the record is broken (dynamic threshold) |
+| Best day-of-week | "Most productive Wednesday ever" | Tracked independently per day-of-week (7 rolling records) |
+| Hot streaks | Most tasks completed in a single hour/day/week | Volume-in-a-window, distinct from existing consecutive-day streak badges |
+| Day streaks | X consecutive days with ≥1 task completed | Lower bar than existing "all dailies" streak badges |
+| Weekly pattern badges | e.g. "dishes every day this week," "everything on time this week" | Requires per-task-name or per-category pattern matching within a week window |
+| Milestones | 50/100/250/500/1,000/2,500/5,000 tasks completed | Extends existing volume tiers (50/100/500/1,000) with 250/2,500/5,000 |
+| Annual awards | Most productive year to date | Rolling year-over-year comparison |
+| Year in review | "Wrapped"-style annual recap — totals, category breakdowns, notable stats | Likely its own dedicated view, surfaced around year-end |
 
-## Implementation Order
-1. Data model + Firestore writes (fuChain fields on tasks, fuTemplates collection)
-2. FU toggle + sequence builder in task form
-3. Template management in Configure tab
-4. Spawning logic on task completion
-5. End-of-Chain modal
-6. Task card indicator icon
+**Acceptance Criteria:**
+- All new badges/records apply retroactively against historical completion data
+- Dynamic-record badges recalculate their "record to beat" each time broken, not pinned to a static number
+- Year-in-review is a distinct dedicated presentation, not just another badge in the shelf
+
+**Notes:** Merge into existing FEAT-020 badge table. Reconcile overlapping concepts (e.g. existing "Consistency" streak badges vs. new "Day streaks") during implementation — keep both, clarify naming.
+
+---
+
+## FEAT-E · Today View: Organization & Visual Hierarchy
+
+**Overlaps with:** existing "Today view redesign" item and the separate "better organization" bug — consolidated into one item per the person's direction.
+
+**Priority:** Medium | **Complexity:** M
+
+**Description:** Today view currently reads as a wall of text — tasks grouped only by category, with no further structure. Add sub-grouping within categories (e.g., by project) and stronger visual hierarchy.
+
+**Acceptance Criteria:**
+- Within each category, tasks can be sub-grouped by project (in addition to flat display)
+- Visual hierarchy strengthened so categories/sub-groups are clearly distinguishable at a glance (ties into FEAT-G)
+- Scoped as a first iterative pass — urgency banding / progressive disclosure remain candidate follow-ups if sub-grouping alone doesn't resolve the "wall of text" feeling
+
+**Notes:** Revisit with the person after shipping to assess whether further restructuring is needed.
+
+---
+
+## FEAT-F · Scrollable Project Sections + In-Section Sorting
+
+**Priority:** Medium | **Complexity:** S/M
+
+**Description:** Project card sections on the Projects tab currently expand to full content height. Convert each section to a scrollable container with a max height, and add sorting within each section.
+
+**Acceptance Criteria:**
+- Each category section has a max height with internal scroll
+- Per-section sort control, at minimum: alphabetical, due date
+- Sort preference settable independently per section
+- Scroll position/sort choice reasonably stable across navigation
+
+---
+
+## FEAT-G · Sticky Category Headers on Projects Tab
+
+**Priority:** Medium | **Complexity:** S
+
+**Description:** Category delineation (Work/Personal/Dailies/etc.) on the Projects tab is currently too soft. Add a frozen-header behavior: the current category's header sticks to the top of the viewport while scrolling its contents, then is replaced by the next category's header.
+
+**Acceptance Criteria:**
+- Category header pins to top of viewport while scrolling through that category's contents
+- Clean transition to the next category's header
+- Sufficient visual weight/contrast to serve as a clear section delineator — may warrant a small design pass beyond pure scroll behavior
+
+**Notes:** Consider alongside FEAT-F — if sections become independently scrollable, confirm whether sticky headers apply per-section or at the page level.
+
+---
+
+## Removed / Not Included
+
+- ~~Delete confirmation modal~~ — explicitly withdrawn; two-click delete UX is being kept as-is.

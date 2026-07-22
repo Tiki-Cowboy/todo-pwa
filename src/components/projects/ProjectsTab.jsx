@@ -277,6 +277,62 @@ function ManageFuTemplatesPanel({ templates, onAddTemplate, onDeleteTemplate }) 
   )
 }
 
+// ── Per-section sort + scroll persistence ────────────────────────────────────
+// Kept in module scope (not component state) so sort choice and scroll
+// position survive navigating away to a project detail view and back —
+// ProjectsTab unmounts on route change, a plain useState would reset.
+const sectionPrefs = { sort: {}, scrollTop: {} }
+
+const SORT_OPTIONS = [
+  { value: 'alpha', label: 'A–Z' },
+  { value: 'due',   label: 'Due' },
+]
+
+function nearestDueDate(project, projectTaskMap) {
+  const dates = (projectTaskMap[project.id] ?? [])
+    .filter(t => t.dueDate)
+    .map(t => t.dueDate)
+  return dates.length ? dates.sort()[0] : null
+}
+
+function sortProjectList(list, mode, projectTaskMap) {
+  const sorted = [...list]
+  if (mode === 'due') {
+    sorted.sort((a, b) => {
+      const da = nearestDueDate(a, projectTaskMap)
+      const db = nearestDueDate(b, projectTaskMap)
+      if (da && db) return da.localeCompare(db)
+      if (da) return -1
+      if (db) return 1
+      return a.name.localeCompare(b.name)
+    })
+  } else {
+    sorted.sort((a, b) => a.name.localeCompare(b.name))
+  }
+  return sorted
+}
+
+function SectionSortControl({ value, onChange }) {
+  return (
+    <div className="flex gap-0.5 p-0.5 rounded-lg shrink-0" style={{ background: 'rgba(12,26,51,0.05)' }}>
+      {SORT_OPTIONS.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className="px-2 py-0.5 rounded-md text-[10px] font-medium transition"
+          style={value === opt.value
+            ? { background: 'white', color: '#0C1A33', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }
+            : { color: '#8B93A1' }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const SECTION_MAX_HEIGHT = 640
+
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const inputClass = "bg-white border rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 transition"
@@ -510,6 +566,7 @@ export default function ProjectsTab({
   onUpdateProject,
   onDeleteProject,
   onToggleDailyTask,
+  onCompleteFrequentTask,
   onAddCategory,
   onDeleteCategory,
   onAddFuTemplate,
@@ -568,9 +625,21 @@ export default function ProjectsTab({
       if (!map[p.categoryName]) map[p.categoryName] = []
       map[p.categoryName].push(p)
     })
-    Object.values(map).forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
     return map
   }, [visibleProjects])
+
+  const [sectionSort, setSectionSort] = useState(() => ({ ...sectionPrefs.sort }))
+
+  function setSort(cat, mode) {
+    sectionPrefs.sort[cat] = mode
+    setSectionSort(prev => ({ ...prev, [cat]: mode }))
+  }
+
+  function sectionScrollRef(cat) {
+    return el => {
+      if (el && sectionPrefs.scrollTop[cat] != null) el.scrollTop = sectionPrefs.scrollTop[cat]
+    }
+  }
 
   const categoryNames = useMemo(() => {
     const names = new Set([
@@ -649,10 +718,17 @@ export default function ProjectsTab({
 
       {categoryNames.map(cat => (
         <div key={cat} className="mb-6">
-          {/* Category header with + icon for standalone task creation */}
-          <div className="flex items-center gap-2 mb-3">
+          {/* Category header — sticky beneath the top nav while scrolling the page */}
+          <div
+            className="flex items-center gap-2 mb-3 bg-page-bg"
+            style={{ position: 'sticky', top: '54px', zIndex: 5, paddingTop: '10px', marginTop: '-10px' }}
+          >
             <span className="text-[11px] font-medium text-text-tertiary uppercase tracking-[1.5px]">{cat}</span>
             <div className="flex-1 h-px" style={{ background: 'rgba(12,26,51,0.08)' }} />
+            <SectionSortControl
+              value={sectionSort[cat] ?? 'alpha'}
+              onChange={mode => setSort(cat, mode)}
+            />
             <button
               title="Add task to General"
               onClick={() => setAddingTaskForCategory(cat)}
@@ -717,42 +793,50 @@ export default function ProjectsTab({
             </div>
           )}
 
-          {/* Project cards — 2-col grid on md+ */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(projectsByCategory[cat] ?? []).map((project, i) => {
-              const projectTasks = projectTaskMap[project.id] ?? []
-              const hasOverdue = projectTasks.some(t => isOverdue(t.dueDate))
-              return (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  index={i}
-                  tasks={projectTasks}
-                  onComplete={handleComplete}
-                  onDelete={handleDelete}
-                  onOpenEdit={setEditingTask}
-                  onAddTask={handleAdd}
-                  onAddSubtask={onAddSubtask}
-                  defaultExpanded={hasOverdue}
-                  onEditProject={p => { setEditingProject(p); setShowProjectModal(true) }}
-                  onDeleteProject={handleDeleteProject}
-                  onUpdateProject={handleQuickUpdateProject}
-                  onToggleDailyTask={onToggleDailyTask}
-                />
-              )
-            })}
-            {/* Outline card — new project in this category */}
-            <button
-              onClick={() => { setNewProjectCategory(cat); setEditingProject(null); setShowProjectModal(true) }}
-              className="rounded-2xl flex flex-col items-center justify-center gap-1.5 py-6 transition-colors hover:bg-black/[0.02]"
-              style={{ border: '1.5px dashed rgba(12,26,51,0.14)', minHeight: '80px', color: '#8B93A1' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
-              </svg>
-              <span className="text-xs font-medium">New project</span>
-            </button>
+          {/* Project cards — 2-col grid on md+, capped height with internal scroll */}
+          <div
+            ref={sectionScrollRef(cat)}
+            onScroll={e => { sectionPrefs.scrollTop[cat] = e.currentTarget.scrollTop }}
+            style={{ maxHeight: `${SECTION_MAX_HEIGHT}px`, overflowY: 'auto' }}
+            className="-mx-1 px-1"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {sortProjectList(projectsByCategory[cat] ?? [], sectionSort[cat] ?? 'alpha', projectTaskMap).map((project, i) => {
+                const projectTasks = projectTaskMap[project.id] ?? []
+                const hasOverdue = projectTasks.some(t => isOverdue(t.dueDate))
+                return (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    index={i}
+                    tasks={projectTasks}
+                    onComplete={handleComplete}
+                    onDelete={handleDelete}
+                    onOpenEdit={setEditingTask}
+                    onAddTask={handleAdd}
+                    onAddSubtask={onAddSubtask}
+                    defaultExpanded={hasOverdue}
+                    onEditProject={p => { setEditingProject(p); setShowProjectModal(true) }}
+                    onDeleteProject={handleDeleteProject}
+                    onUpdateProject={handleQuickUpdateProject}
+                    onToggleDailyTask={onToggleDailyTask}
+                    onCompleteFrequentTask={onCompleteFrequentTask}
+                  />
+                )
+              })}
+              {/* Outline card — new project in this category */}
+              <button
+                onClick={() => { setNewProjectCategory(cat); setEditingProject(null); setShowProjectModal(true) }}
+                className="rounded-2xl flex flex-col items-center justify-center gap-1.5 py-6 transition-colors hover:bg-black/[0.02]"
+                style={{ border: '1.5px dashed rgba(12,26,51,0.14)', minHeight: '80px', color: '#8B93A1' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="6" y1="1" x2="6" y2="11" />
+                  <line x1="1" y1="6" x2="11" y2="6" />
+                </svg>
+                <span className="text-xs font-medium">New project</span>
+              </button>
+            </div>
           </div>
         </div>
       ))}

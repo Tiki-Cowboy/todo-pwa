@@ -24,7 +24,6 @@ export default function ProjectModal({ categories, project, defaultCategoryName,
   const [status, setStatus]           = useState(project?.status ?? 'active')
   const [description, setDescription] = useState(project?.description ?? '')
   const [statusNote, setStatusNote]   = useState(project?.statusNote ?? '')
-  const [type, setType]               = useState(project?.type ?? 'standard')
   const [dealName, setDealName]       = useState(project?.dealName ?? '')
   const [dealUrl, setDealUrl]         = useState(project?.dealUrl ?? '')
   const [contactName, setContactName] = useState(project?.contactName ?? '')
@@ -41,7 +40,7 @@ export default function ProjectModal({ categories, project, defaultCategoryName,
     if (Object.keys(errors).length > 0) { setUrlErrors(errors); return }
     setSaving(true)
     await onSave({
-      name: name.trim(), categoryName, status, description: description.trim(), type,
+      name: name.trim(), categoryName, status, description: description.trim(),
       statusNote: statusNote.trim(),
       dealName: dealName.trim() || null,
       dealUrl: dealUrl.trim() || null,
@@ -89,29 +88,6 @@ export default function ProjectModal({ categories, project, defaultCategoryName,
                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-text-secondary mb-2">Type</label>
-            <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#F4F2ED' }}>
-              {[{ value: 'standard', label: 'Standard' }, { value: 'daily', label: '↻ Daily' }].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setType(opt.value)}
-                  className="flex-1 py-1.5 rounded-lg text-xs font-medium transition"
-                  style={type === opt.value
-                    ? { background: 'white', color: '#0C1A33', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
-                    : { background: 'transparent', color: '#8B93A1' }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            {type === 'daily' && (
-              <p className="text-[11px] text-text-tertiary mt-1.5">
-                Tasks reset each day — check them off and they'll be back tomorrow.
-              </p>
-            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">

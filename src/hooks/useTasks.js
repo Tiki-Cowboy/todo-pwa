@@ -6,8 +6,15 @@ import {
   deleteTask as fsDelete,
   updateTask as fsUpdate,
   setDailyTaskCompletion as fsSetDailyCompletion,
+  setFrequentTaskCompletion as fsSetFrequentCompletion,
   spawnFollowUpTask as fsSpawnFollowUp,
 } from '../lib/firestore'
+import { computeNextDueDate } from '../lib/recurrence'
+
+function todayStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 export function useTasks(uid) {
   const [tasks, setTasks]               = useState([])
@@ -111,9 +118,15 @@ export function useTasks(uid) {
   }
 
   async function toggleDailyTask(taskId, doneToday) {
-    const d = new Date()
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    await fsSetDailyCompletion(uid, taskId, doneToday ? null : today)
+    await fsSetDailyCompletion(uid, taskId, doneToday ? null : todayStr())
+  }
+
+  async function completeFrequentTask(taskId) {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task?.recurrence) return
+    const today = todayStr()
+    const nextDueDate = computeNextDueDate(task.recurrence, today)
+    await fsSetFrequentCompletion(uid, taskId, { lastCompletedDate: today, nextDueDate })
   }
 
   return {
@@ -127,6 +140,7 @@ export function useTasks(uid) {
     deleteTask,
     updateTask,
     toggleDailyTask,
+    completeFrequentTask,
     extendFuChain,
   }
 }

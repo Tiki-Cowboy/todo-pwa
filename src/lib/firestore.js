@@ -46,9 +46,9 @@ export function subscribeToCategories(uid, callback) {
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
-export async function addTask(uid, { text, priority, category, dueDate = null, parentId = null, projectId = null, fuChain = null }) {
+export async function addTask(uid, { text, priority, category, dueDate = null, parentId = null, projectId = null, fuChain = null, recurrence = null, type = 'standard' }) {
   await addDoc(tasksRef(uid), {
-    text, priority, category, dueDate, parentId, projectId, fuChain,
+    text, priority, category, dueDate, parentId, projectId, fuChain, recurrence, type,
     createdAt: serverTimestamp(),
     completedAt: null,
     lastCompletedDate: null,
@@ -77,6 +77,13 @@ export async function setDailyTaskCompletion(uid, taskId, date) {
   await updateDoc(doc(tasksRef(uid), taskId), { lastCompletedDate: date })
 }
 
+export async function setFrequentTaskCompletion(uid, taskId, { lastCompletedDate, nextDueDate }) {
+  await updateDoc(doc(tasksRef(uid), taskId), {
+    lastCompletedDate,
+    'recurrence.nextDueDate': nextDueDate,
+  })
+}
+
 export async function getLastResetDate(uid) {
   const snap = await getDoc(userDocRef(uid))
   return snap.exists() ? (snap.data().lastResetDate ?? null) : null
@@ -87,6 +94,23 @@ export async function resetDailyTasks(uid, taskIds) {
   taskIds.forEach(id => batch.update(doc(tasksRef(uid), id), { lastCompletedDate: null }))
   await batch.commit()
   await setDoc(userDocRef(uid), { lastResetDate: localDateStr() }, { merge: true })
+}
+
+// One-time migration: task type used to live on the project (type: 'daily' | 'frequent').
+// Moves it onto each task and clears the now-unused project field. Idempotent — once no
+// project has a legacy type, this is a no-op every subsequent run.
+export async function migrateLegacyProjectTypes(uid) {
+  const snap = await getDocs(query(projectsRef(uid), where('type', 'in', ['daily', 'frequent'])))
+  if (snap.empty) return
+
+  const batch = writeBatch(db)
+  for (const projectDoc of snap.docs) {
+    const legacyType = projectDoc.data().type
+    const taskSnap = await getDocs(query(tasksRef(uid), where('projectId', '==', projectDoc.id)))
+    taskSnap.forEach(t => batch.update(t.ref, { type: t.data().type ?? legacyType }))
+    batch.update(projectDoc.ref, { type: 'standard' })
+  }
+  await batch.commit()
 }
 
 export async function updateTask(uid, taskId, updates) {

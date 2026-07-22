@@ -32,13 +32,15 @@ function ReportingIcon() {
   )
 }
 
+import { NavLink } from 'react-router-dom'
+
 const TABS = [
-  { id: 'home',      label: 'Today',     Icon: TodayIcon },
-  { id: 'projects',  label: 'Projects',  Icon: ProjectsIcon },
-  { id: 'reporting', label: 'Reporting', Icon: ReportingIcon },
+  { path: '/today',     label: 'Today',     Icon: TodayIcon },
+  { path: '/projects',  label: 'Projects',  Icon: ProjectsIcon },
+  { path: '/reporting', label: 'Reporting', Icon: ReportingIcon },
 ]
 
-export default function BottomNav({ activeTab, onTabChange }) {
+export default function BottomNav() {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-20 md:hidden"
@@ -49,26 +51,27 @@ export default function BottomNav({ activeTab, onTabChange }) {
       }}
     >
       <div className="max-w-4xl mx-auto flex">
-        {TABS.map(({ id, label, Icon }) => {
-          const active = activeTab === id
-          return (
-            <button
-              key={id}
-              onClick={() => onTabChange(id)}
-              className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-colors"
-              style={{ color: active ? '#C4A24E' : '#6B7793' }}
-              aria-label={label}
-            >
-              <Icon />
-              <span
-                className="text-[10px] font-medium uppercase tracking-[1px]"
-                style={{ color: active ? '#C4A24E' : '#6B7793' }}
-              >
-                {label}
-              </span>
-            </button>
-          )
-        })}
+        {TABS.map(({ path, label, Icon }) => (
+          <NavLink
+            key={path}
+            to={path}
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-colors"
+            style={({ isActive }) => ({ color: isActive ? '#C4A24E' : '#6B7793' })}
+            aria-label={label}
+          >
+            {({ isActive }) => (
+              <>
+                <Icon />
+                <span
+                  className="text-[10px] font-medium uppercase tracking-[1px]"
+                  style={{ color: isActive ? '#C4A24E' : '#6B7793' }}
+                >
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
       </div>
     </nav>
   )
